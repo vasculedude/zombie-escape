@@ -57,6 +57,26 @@ export default class GameScene extends Phaser.Scene {
             3000
         );
 
+        this.score = 0;
+
+        this.scoreText = this.add.text(
+            this.cameras.main.width /
+                this.cameras.main.zoom - 20,
+            20,
+            'Score: 0',
+            {
+                fontSize: '20px',
+                color: '#ffffff',
+                fontStyle: 'bold',
+                stroke: '#000000',
+                strokeThickness: 4
+            }
+        );
+
+        this.scoreText
+            .setOrigin(1, 0)
+            .setDepth(200000);
+
         // =========================
         // GROUND
         // =========================
@@ -73,11 +93,14 @@ export default class GameScene extends Phaser.Scene {
         // ROAD
         // =========================
 
+        const roadCenterY = 1500;
+        const roadHeight = 180;
+
         this.add.rectangle(
             1500,
-            1500,
+            roadCenterY,
             3000,
-            180,
+            roadHeight,
             0x555555
         ).setDepth(-1);
 
@@ -215,6 +238,17 @@ export default class GameScene extends Phaser.Scene {
                 continue;
             }
 
+            const treeFootprint = 25;
+            const roadTop = roadCenterY - roadHeight / 2;
+            const roadBottom = roadCenterY + roadHeight / 2;
+
+            if (
+                y + treeFootprint >= roadTop &&
+                y - treeFootprint <= roadBottom
+            ) {
+                continue;
+            }
+
             const tree = new Tree(
                 this,
                 x,
@@ -297,44 +331,84 @@ for (let i = 0; i < 12; i++) {
         // =========================
          this.projectiles = [];
         this.zombies = [];
+        this.zombieSpawnRadius = 500;
 
         for (let i = 0; i < 5; i++) {
 
-            const zombie = new Zombie(
-                this,
-                650 + i * 80,
-                350
-            );
+            this.spawnZombieNearPlayer();
+        }
 
-            this.zombies.push(zombie);
+        this.time.addEvent({
+            delay: 10000,
+            callback: () => {
+                this.spawnZombieNearPlayer();
+            },
+            loop: true
+        });
+    }
 
-            // Zombie ↔ house
+    spawnZombieNearPlayer() {
+
+        const angle = Phaser.Math.FloatBetween(
+            0,
+            Math.PI * 2
+        );
+
+        const distance =
+            Math.sqrt(Math.random()) *
+            this.zombieSpawnRadius;
+
+        const x = Phaser.Math.Clamp(
+            this.player.x + Math.cos(angle) * distance,
+            25,
+            2975
+        );
+
+        const y = Phaser.Math.Clamp(
+            this.player.y + Math.sin(angle) * distance,
+            25,
+            2975
+        );
+
+        this.spawnZombie(x, y);
+    }
+
+    spawnZombie(x, y) {
+
+        const zombie = new Zombie(
+            this,
+            x,
+            y
+        );
+
+        this.zombies.push(zombie);
+
+        // Zombie and house
+        this.physics.add.collider(
+            zombie,
+            this.house.body,
+            () => {
+                zombie.pickNewDirection();
+            }
+        );
+
+        // Zombie and trees
+        for (const tree of this.trees) {
+
             this.physics.add.collider(
                 zombie,
-                this.house.body,
+                tree.body,
                 () => {
                     zombie.pickNewDirection();
                 }
             );
-
-            // Zombie ↔ trees
-            for (const tree of this.trees) {
-
-                this.physics.add.collider(
-                    zombie,
-                    tree.body,
-                    () => {
-                        zombie.pickNewDirection();
-                    }
-                );
-            }
-
-            // Zombie ↔ player
-            this.physics.add.collider(
-                zombie,
-                this.player
-            );
         }
+
+        // Zombie and player
+        this.physics.add.collider(
+            zombie,
+            this.player
+        );
     }
 
     // =========================
@@ -342,6 +416,11 @@ for (let i = 0; i < 12; i++) {
     // =========================
 
  update() {
+
+    this.scoreText.setPosition(
+        this.cameras.main.worldView.right - 20,
+        this.cameras.main.worldView.top + 20
+    );
 
     this.player.update();
 

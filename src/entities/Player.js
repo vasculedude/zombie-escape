@@ -53,6 +53,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
         this.weapon = null;
         this.lastShotTime = 0;
+        this.shotCount = 0;
+        this.reloadUntil = 0;
+        this.reloadDelay = 1000;
 
         // =========================
         // PLAYER HP BAR
@@ -60,24 +63,63 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
         this.healthBg =
             scene.add.rectangle(
-                this.x,
-                this.y - 32,
-                50,
-                7,
+                0,
+                0,
+                180,
+                18,
                 0x222222
             );
 
         this.healthBar =
             scene.add.rectangle(
-                this.x,
-                this.y - 32,
-                46,
-                5,
+                0,
+                0,
+                170,
+                12,
                 0x00aaff
             );
 
-        this.healthBg.setDepth(100);
-        this.healthBar.setDepth(101);
+        this.healthBg.setPosition(110, 80);
+        this.healthBar.setPosition(110, 80);
+        this.healthBg.setOrigin(0, 0);
+        this.healthBar.setOrigin(0, 0);
+        this.healthBg.setDepth(200000);
+        this.healthBar.setDepth(200001);
+        this.healthBg.setScrollFactor(1);
+        this.healthBar.setScrollFactor(1);
+
+        this.weaponText =
+            scene.add.text(
+                20,
+                20,
+                'NO WEAPON',
+                {
+                    fontSize: '20px',
+                    color: '#ffffff',
+                    fontStyle: 'bold',
+                    stroke: '#000000',
+                    strokeThickness: 4
+                }
+            );
+
+        this.ammoText =
+            scene.add.text(
+                20,
+                48,
+                'Ammo: --',
+                {
+                    fontSize: '18px',
+                    color: '#ffffff',
+                    fontStyle: 'bold',
+                    stroke: '#000000',
+                    strokeThickness: 4
+                }
+            );
+
+        this.weaponText.setDepth(200000);
+        this.ammoText.setDepth(200000);
+        this.weaponText.setScrollFactor(0);
+        this.ammoText.setScrollFactor(0);
 
         // =========================
         // MOVEMENT
@@ -132,7 +174,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         }
 
         this.healthBar.width =
-            46 *
+            170 *
             (this.health / this.maxHealth);
     }
 
@@ -163,6 +205,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             if (distance < 35) {
 
                 this.weapon = weapon;
+                this.shotCount = 0;
+                this.reloadUntil = 0;
 
                 weapon.destroy();
 
@@ -193,6 +237,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
         const now =
             this.scene.time.now;
+
+        if (now < this.reloadUntil) {
+            return;
+        }
 
         if (
             now <
@@ -238,6 +286,12 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         }
 
         this.lastShotTime = now;
+        this.shotCount += 1;
+
+        if (this.shotCount >= 10) {
+            this.reloadUntil = now + this.reloadDelay;
+            this.shotCount = 0;
+        }
 
         const angle =
             Phaser.Math.Angle.Between(
@@ -321,25 +375,46 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         }
 
         // =========================
-        // FOLLOW PLAYER
+        // HUD
         // =========================
 
+        const hudX =
+            this.scene.cameras.main.worldView.left + 20;
+        const hudY =
+            this.scene.cameras.main.worldView.top + 20;
+
         this.healthBg.setPosition(
-            this.x,
-            this.y - 32
+            hudX,
+            hudY
         );
 
         this.healthBar.setPosition(
-            this.x,
-            this.y - 32
+            hudX,
+            hudY
         );
+
+        const nameText =
+            this.weapon ? this.weapon.name : 'NO WEAPON';
+        this.weaponText.setText(nameText);
+
+        if (!this.weapon) {
+            this.ammoText.setText('Ammo: --');
+        } else if (this.scene.time.now < this.reloadUntil) {
+            this.ammoText.setText('Ammo: Reloading...');
+        } else {
+            const ammoLeft =
+                Math.max(0, 10 - this.shotCount);
+            this.ammoText.setText(
+                `Ammo: ${ammoLeft}/10`
+            );
+        }
 
         // =========================
         // UPDATE HP
         // =========================
 
         this.healthBar.width =
-            46 *
+            170 *
             (this.health / this.maxHealth);
 
         // =========================

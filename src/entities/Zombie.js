@@ -133,6 +133,11 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
                 );
             }
 
+            this.scene.score++;
+            this.scene.scoreText.setText(
+                `Score: ${this.scene.score}`
+            );
+
             this.destroy();
 
             return;
@@ -324,8 +329,7 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
         ) {
 
             // Calculate a new path
-            // every 500 milliseconds
-
+            //
             if (
                 this.scene.time.now >=
                 this.lastPathTime +
