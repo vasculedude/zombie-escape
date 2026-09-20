@@ -3,9 +3,42 @@ import Projectile from './Projectile.js';
 
 export default class Player extends Phaser.Physics.Arcade.Sprite {
 
+    static createSpriteTexture(scene) {
+        const textureKey = 'player-triangle';
+
+        if (!scene.textures.exists(textureKey)) {
+            const graphics = scene.make.graphics({
+                x: 0,
+                y: 0,
+                add: false
+            });
+
+            graphics.clear();
+            graphics.fillStyle(0x2ecc71, 1);
+            graphics.lineStyle(2, 0x0f4d2c, 1);
+
+            graphics.beginPath();
+            graphics.moveTo(20, 0);
+            graphics.lineTo(38, 38);
+            graphics.lineTo(20, 28);
+            graphics.lineTo(2, 38);
+            graphics.closePath();
+            graphics.fillPath();
+            graphics.strokePath();
+
+            graphics.fillStyle(0x0f4d2c, 1);
+            graphics.fillTriangle(20, 6, 12, 22, 28, 22);
+
+            graphics.generateTexture(textureKey, 40, 40);
+            graphics.destroy();
+        }
+
+        return textureKey;
+    }
+
     constructor(scene, x, y) {
 
-        super(scene, x, y, null);
+        super(scene, x, y, Player.createSpriteTexture(scene));
 
         scene.add.existing(this);
         scene.physics.add.existing(this);
@@ -14,12 +47,12 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         // PLAYER
         // =========================
 
-        this.setDisplaySize(40, 40);
+        this.setDisplaySize(42, 42);
+        this.setOrigin(0.5, 0.5);
+        this.setDepth(15);
 
-        this.body.setSize(24, 24);
-        this.body.setOffset(8, 8);
-
-        this.setTint(0x0099ff);
+        this.body.setSize(18, 18);
+        this.body.setOffset(11, 11);
 
         this.speed = 200;
 
@@ -373,6 +406,21 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                 .normalize()
                 .scale(this.speed);
         }
+
+        const pointer = this.scene.input.activePointer;
+        const worldPoint = this.scene.cameras.main.getWorldPoint(
+            pointer.x,
+            pointer.y
+        );
+
+        const angle = Phaser.Math.Angle.Between(
+            this.x,
+            this.y,
+            worldPoint.x,
+            worldPoint.y
+        );
+
+        this.setRotation(angle + Math.PI / 2);
 
         // =========================
         // HUD

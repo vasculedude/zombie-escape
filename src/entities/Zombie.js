@@ -2,9 +2,60 @@
 
 export default class Zombie extends Phaser.Physics.Arcade.Sprite {
 
+    static createSpriteTexture(scene) {
+        const textureKey = 'zombie-cartoon';
+
+        if (!scene.textures.exists(textureKey)) {
+            const graphics = scene.make.graphics({
+                x: 0,
+                y: 0,
+                add: false
+            });
+
+            graphics.clear();
+
+            // Shadow
+            graphics.fillStyle(0x000000, 0.18);
+            graphics.fillEllipse(32, 52, 30, 9);
+
+            // Arms
+            graphics.fillStyle(0x5a3a1d, 1);
+            graphics.fillRoundedRect(12, 30, 8, 20, 4);
+            graphics.fillRoundedRect(44, 30, 8, 20, 4);
+
+            // Body
+            graphics.fillStyle(0x7cae2d, 1);
+            graphics.fillEllipse(32, 34, 28, 26);
+
+            // Belt / chest
+            graphics.fillStyle(0x506b17, 1);
+            graphics.fillRoundedRect(19, 33, 26, 9, 4);
+
+            // Head / mask
+            graphics.fillStyle(0x3f2a1b, 1);
+            graphics.fillEllipse(32, 16, 16, 14);
+
+            // Face details
+            graphics.fillStyle(0x0d0d0d, 1);
+            graphics.fillRect(27, 15, 3, 3);
+            graphics.fillRect(34, 15, 3, 3);
+            graphics.fillRect(29, 20, 6, 2);
+
+            // Legs
+            graphics.fillStyle(0x2b2b2b, 1);
+            graphics.fillRoundedRect(22, 44, 7, 14, 3);
+            graphics.fillRoundedRect(35, 44, 7, 14, 3);
+
+            graphics.generateTexture(textureKey, 64, 64);
+            graphics.destroy();
+        }
+
+        return textureKey;
+    }
+
     constructor(scene, x, y) {
 
-        super(scene, x, y, null);
+        super(scene, x, y, Zombie.createSpriteTexture(scene));
 
         scene.add.existing(this);
         scene.physics.add.existing(this);
@@ -16,7 +67,10 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
         // =========================
 
         this.setDisplaySize(50, 50);
-        this.setTint(0xff0000);
+        this.setOrigin(0.5, 0.5);
+        this.setDepth(12);
+        this.body.setSize(24, 30);
+        this.body.setOffset(20, 18);
 
         // =========================
         // MOVEMENT
@@ -93,6 +147,8 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
         this.pathCooldown = 500;
 
         this.isPathfinding = false;
+
+        this.animationTime = 0;
     }
 
     // =========================
@@ -309,6 +365,17 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
 
         if (!player) {
             return;
+        }
+
+        const moveSpeed = Math.hypot(this.body.velocity.x, this.body.velocity.y);
+        this.animationTime += this.scene.game.loop.delta;
+
+        if (moveSpeed > 10) {
+            const bob = Math.sin(this.animationTime / 160) * 2;
+            this.setScale(1, 1 + (Math.abs(Math.sin(this.animationTime / 180)) * 0.05));
+            this.setY(this.y + bob * 0.2);
+        } else {
+            this.setScale(1, 1);
         }
 
         const distance =
