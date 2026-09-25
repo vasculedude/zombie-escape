@@ -5,6 +5,8 @@ import Player from '../entities/Player.js';
 import Zombie from '../entities/Zombie.js';
 import EasyStar from 'easystarjs';
 import Weapon from '../entities/Weapon.js';
+import AmmoPickup from '../entities/AmmoPickup.js';
+import MedKitPickup from '../entities/MedKitPickup.js';
 
 export default class GameScene extends Phaser.Scene {
 
@@ -308,6 +310,34 @@ for (let i = 0; i < 22; i++) {
     this.weapons.push(weapon);
 }
 
+this.ammoPickups = [];
+this.maxAmmoPickups = 20;
+
+for (let i = 0; i < this.maxAmmoPickups; i++) {
+    this.spawnAmmoNearPlayer();
+}
+
+this.time.addEvent({
+    delay: 15000,
+    callback: () => {
+        if (this.ammoPickups.length < this.maxAmmoPickups) {
+            this.spawnAmmoNearPlayer();
+        }
+    },
+    loop: true
+});
+
+this.medKitPickups = [];
+
+this.time.addEvent({
+    delay: 60000,
+    callback: () => {
+        this.spawnMedKitNearPlayer();
+        this.spawnMedKitNearPlayer();
+    },
+    loop: true
+});
+
 
 
         // =========================
@@ -345,6 +375,42 @@ for (let i = 0; i < 22; i++) {
             },
             loop: true
         });
+    }
+
+    spawnAmmoNearPlayer() {
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const distance = Phaser.Math.Between(120, 900);
+        const x = Phaser.Math.Clamp(
+            this.player.x + Math.cos(angle) * distance,
+            35,
+            2965
+        );
+        const y = Phaser.Math.Clamp(
+            this.player.y + Math.sin(angle) * distance,
+            35,
+            2965
+        );
+
+        const pickup = new AmmoPickup(this, x, y);
+        this.ammoPickups.push(pickup);
+    }
+
+    spawnMedKitNearPlayer() {
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const distance = Phaser.Math.Between(120, 900);
+        const x = Phaser.Math.Clamp(
+            this.player.x + Math.cos(angle) * distance,
+            35,
+            2965
+        );
+        const y = Phaser.Math.Clamp(
+            this.player.y + Math.sin(angle) * distance,
+            35,
+            2965
+        );
+
+        const pickup = new MedKitPickup(this, x, y);
+        this.medKitPickups.push(pickup);
     }
 
     spawnZombieNearPlayer() {

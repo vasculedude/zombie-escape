@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import Projectile from './Projectile.js';
+import { MAX_TOTAL_AMMO, applyAmmoPickup } from '../utils/ammoUtils.js';
 
 export default class Player extends Phaser.Physics.Arcade.Sprite {
 
@@ -102,8 +103,12 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             );
 
         this.weapon = null;
+        this.heldWeapon = null;
         this.lastShotTime = 0;
-        this.shotCount = 0;
+        this.magazineSize = 10;
+        this.magazineAmmo = 0;
+        this.reserveAmmo = 100;
+        this.maxReserveAmmo = MAX_TOTAL_AMMO;
         this.reloadUntil = 0;
         this.reloadDelay = 1000;
 
@@ -154,11 +159,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
         this.ammoText =
             scene.add.text(
-                20,
-                48,
-                'Ammo: --',
+                0,
+                0,
+                '100',
                 {
-                    fontSize: '18px',
+                    fontSize: '22px',
                     color: '#ffffff',
                     fontStyle: 'bold',
                     stroke: '#000000',
@@ -168,8 +173,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
         this.weaponText.setDepth(200000);
         this.ammoText.setDepth(200000);
-        this.weaponText.setScrollFactor(0);
-        this.ammoText.setScrollFactor(0);
+        this.weaponText.setOrigin(0, 0);
+        this.ammoText.setOrigin(0.5, 0);
+        this.weaponText.setScrollFactor(1);
+        this.ammoText.setScrollFactor(1);
 
         // =========================
         // MOVEMENT
@@ -255,8 +262,20 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             if (distance < 35) {
 
                 this.weapon = weapon;
-                this.shotCount = 0;
+                this.magazineAmmo = this.magazineSize;
                 this.reloadUntil = 0;
+
+                if (this.heldWeapon) {
+                    this.heldWeapon.destroy();
+                }
+
+                this.heldWeapon = this.scene.add.image(
+                    this.x,
+                    this.y,
+                    `weapon-${weapon.type}`
+                );
+                this.heldWeapon.setDisplaySize(30, 20);
+                this.heldWeapon.setDepth(this.depth + 1);
 
                 weapon.destroy();
 
@@ -271,6 +290,83 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                 );
 
                 break;
+            }
+        }
+    }
+
+    tryPickupAmmo() {
+        if (!this.scene.ammoPickups) {
+            return;
+        }
+
+        for (const pickup of this.scene.ammoPickups) {
+            if (!pickup.active) {
+                continue;
+            }
+
+            const distance = Phaser.Math.Distance.Between(
+                this.x,
+                this.y,
+                pickup.x,
+                pickup.y
+            );
+
+            if (distance < 35) {
+                const nextAmmo = applyAmmoPickup({
+                    magazineAmmo: this.magazineAmmo,
+                    reserveAmmo: this.reserveAmmo,
+                    pickupAmount: pickup.amount,
+                    maxAmmo: MAX_TOTAL_AMMO
+                });
+
+                this.magazineAmmo = nextAmmo.magazineAmmo;
+                this.reserveAmmo = nextAmmo.reserveAmmo;
+
+                pickup.destroy();
+                this.scene.ammoPickups = this.scene.ammoPickups.filter(
+                    item => item !== pickup
+                );
+
+                if (
+                    this.weapon &&
+                    this.magazineAmmo === 0 &&
+                    this.reloadUntil === 0
+                ) {
+                    this.reloadUntil = this.scene.time.now + this.reloadDelay;
+                }
+            }
+        }
+    }
+
+    tryPickupMedKit() {
+        if (!this.scene.medKitPickups || this.health >= this.maxHealth) {
+            return;
+        }
+
+        for (const pickup of this.scene.medKitPickups) {
+            if (!pickup.active) {
+                continue;
+            }
+
+            const distance = Phaser.Math.Distance.Between(
+                this.x,
+                this.y,
+                pickup.x,
+                pickup.y
+            );
+
+            if (distance < 35) {
+                this.health = Math.min(
+                    this.maxHealth,
+                    this.health + pickup.healAmount
+                );
+                this.healthBar.width =
+                    170 * (this.health / this.maxHealth);
+
+                pickup.destroy();
+                this.scene.medKitPickups = this.scene.medKitPickups.filter(
+                    item => item !== pickup
+                );
             }
         }
     }
@@ -300,12 +396,19 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             return;
         }
 
-        this.lastShotTime = now;
-        this.shotCount += 1;
+        if (this.magazineAmmo <= 0) {
+            if (this.reserveAmmo > 0 && this.reloadUntil === 0) {
+                this.reloadUntil = now + this.reloadDelay;
+            }
 
-        if (this.shotCount >= 10) {
+            return;
+        }
+
+        this.lastShotTime = now;
+        this.magazineAmmo -= 1;
+
+        if (this.magazineAmmo === 0 && this.reserveAmmo > 0) {
             this.reloadUntil = now + this.reloadDelay;
-            this.shotCount = 0;
         }
 
         const angle = this.facingAngle;
@@ -350,6 +453,15 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
         this.facingAngle = angle;
         this.setRotation(angle + Math.PI / 2);
+
+        if (this.heldWeapon && this.heldWeapon.active) {
+            this.heldWeapon.setPosition(
+                this.x + Math.cos(angle) * 13,
+                this.y + Math.sin(angle) * 13
+            );
+            this.heldWeapon.setRotation(angle);
+            this.heldWeapon.setDepth(this.depth + 1);
+        }
 
         let velocityX = 0;
         let velocityY = 0;
@@ -425,19 +537,46 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             hudY
         );
 
+        if (
+            this.weapon &&
+            this.magazineAmmo === 0 &&
+            this.reserveAmmo > 0 &&
+            this.reloadUntil > 0 &&
+            this.scene.time.now >= this.reloadUntil
+        ) {
+            const roundsToLoad = Math.min(
+                this.magazineSize,
+                this.reserveAmmo
+            );
+
+            this.magazineAmmo = roundsToLoad;
+            this.reserveAmmo -= roundsToLoad;
+            this.reloadUntil = 0;
+        }
+
         const nameText =
             this.weapon ? this.weapon.name : 'NO WEAPON';
         this.weaponText.setText(nameText);
+        this.ammoText.setText(
+            String(this.magazineAmmo + this.reserveAmmo)
+        );
+        this.weaponText.setPosition(hudX, hudY + 26);
 
-        if (!this.weapon) {
-            this.ammoText.setText('Ammo: --');
-        } else if (this.scene.time.now < this.reloadUntil) {
-            this.ammoText.setText('Ammo: Reloading...');
+        const scoreText = this.scene.scoreText;
+        const view = this.scene.cameras.main.worldView;
+        const healthRight = hudX + this.healthBg.width;
+        const scoreLeft = scoreText.x - scoreText.width;
+        const availableGap = scoreLeft - healthRight;
+
+        if (availableGap >= this.ammoText.width + 16) {
+            this.ammoText.setPosition(
+                healthRight + availableGap / 2,
+                hudY
+            );
         } else {
-            const ammoLeft =
-                Math.max(0, 10 - this.shotCount);
-            this.ammoText.setText(
-                `Ammo: ${ammoLeft}/10`
+            this.ammoText.setPosition(
+                view.left + view.width / 2,
+                hudY + 24
             );
         }
 
@@ -454,6 +593,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         // =========================
 
         this.tryPickupWeapon();
+        this.tryPickupAmmo();
+        this.tryPickupMedKit();
 
         // =========================
         // PUNCH
