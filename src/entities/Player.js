@@ -4,7 +4,7 @@ import Projectile from './Projectile.js';
 export default class Player extends Phaser.Physics.Arcade.Sprite {
 
     static createSpriteTexture(scene) {
-        const textureKey = 'player-triangle';
+        const textureKey = 'player-human';
 
         if (!scene.textures.exists(textureKey)) {
             const graphics = scene.make.graphics({
@@ -14,22 +14,38 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             });
 
             graphics.clear();
-            graphics.fillStyle(0x2ecc71, 1);
-            graphics.lineStyle(2, 0x0f4d2c, 1);
 
-            graphics.beginPath();
-            graphics.moveTo(20, 0);
-            graphics.lineTo(38, 38);
-            graphics.lineTo(20, 28);
-            graphics.lineTo(2, 38);
-            graphics.closePath();
-            graphics.fillPath();
-            graphics.strokePath();
+            // Shadow
+            graphics.fillStyle(0x000000, 0.25);
+            graphics.fillEllipse(24, 38, 20, 8);
 
-            graphics.fillStyle(0x0f4d2c, 1);
-            graphics.fillTriangle(20, 6, 12, 22, 28, 22);
+            // Legs
+            graphics.fillStyle(0x2a2a2a, 1);
+            graphics.fillRect(17, 29, 4, 12);
+            graphics.fillRect(27, 29, 4, 12);
 
-            graphics.generateTexture(textureKey, 40, 40);
+            // Body
+            graphics.fillStyle(0x4dabf7, 1);
+            graphics.fillRoundedRect(13, 15, 22, 14, 4);
+
+            // Head
+            graphics.fillStyle(0xf2d0b5, 1);
+            graphics.fillEllipse(24, 10, 12, 12);
+
+            // Hair
+            graphics.fillStyle(0x2b1d12, 1);
+            graphics.fillRoundedRect(16, 5, 16, 6, 3);
+
+            // Arms
+            graphics.fillStyle(0xf2d0b5, 1);
+            graphics.fillRoundedRect(9, 17, 4, 14, 2);
+            graphics.fillRoundedRect(35, 17, 4, 14, 2);
+
+            // Weapon hand
+            graphics.fillStyle(0x7d7d7d, 1);
+            graphics.fillRect(29, 20, 13, 3);
+
+            graphics.generateTexture(textureKey, 48, 48);
             graphics.destroy();
         }
 
@@ -51,10 +67,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.setOrigin(0.5, 0.5);
         this.setDepth(15);
 
-        this.body.setSize(18, 18);
-        this.body.setOffset(11, 11);
+        this.body.setSize(18, 24);
+        this.body.setOffset(15, 16);
 
         this.speed = 200;
+        this.facingAngle = 0;
 
         // =========================
         // HEALTH
@@ -283,41 +300,6 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             return;
         }
 
-        let closestZombie = null;
-
-        let closestDistance =
-            this.weapon.range;
-
-        for (
-            const zombie of this.scene.zombies
-        ) {
-
-            if (!zombie.active) {
-                continue;
-            }
-
-            const distance =
-                Phaser.Math.Distance.Between(
-                    this.x,
-                    this.y,
-                    zombie.x,
-                    zombie.y
-                );
-
-            if (
-                distance <
-                closestDistance
-            ) {
-
-                closestDistance = distance;
-                closestZombie = zombie;
-            }
-        }
-
-        if (!closestZombie) {
-            return;
-        }
-
         this.lastShotTime = now;
         this.shotCount += 1;
 
@@ -326,13 +308,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             this.shotCount = 0;
         }
 
-        const angle =
-            Phaser.Math.Angle.Between(
-                this.x,
-                this.y,
-                closestZombie.x,
-                closestZombie.y
-            );
+        const angle = this.facingAngle;
 
         const projectile =
             new Projectile(
@@ -359,37 +335,60 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
     update() {
 
+        const pointer = this.scene.input.activePointer;
+        const worldPoint = this.scene.cameras.main.getWorldPoint(
+            pointer.x,
+            pointer.y
+        );
+
+        const angle = Phaser.Math.Angle.Between(
+            this.x,
+            this.y,
+            worldPoint.x,
+            worldPoint.y
+        );
+
+        this.facingAngle = angle;
+        this.setRotation(angle + Math.PI / 2);
+
         let velocityX = 0;
         let velocityY = 0;
 
-        if (
-            this.cursors.left.isDown ||
-            this.keys.A.isDown
-        ) {
-
-            velocityX = -this.speed;
-
-        } else if (
-            this.cursors.right.isDown ||
-            this.keys.D.isDown
-        ) {
-
-            velocityX = this.speed;
-        }
-
-        if (
+        const moveForward =
             this.cursors.up.isDown ||
-            this.keys.W.isDown
-        ) {
+            this.keys.W.isDown;
 
-            velocityY = -this.speed;
+        if (moveForward) {
+            const dx = worldPoint.x - this.x;
+            const dy = worldPoint.y - this.y;
+            const length = Math.hypot(dx, dy) || 1;
 
-        } else if (
-            this.cursors.down.isDown ||
-            this.keys.S.isDown
-        ) {
+            velocityX = (dx / length) * this.speed;
+            velocityY = (dy / length) * this.speed;
 
-            velocityY = this.speed;
+        } else {
+            if (
+                this.cursors.left.isDown ||
+                this.keys.A.isDown
+            ) {
+
+                velocityX = -this.speed;
+
+            } else if (
+                this.cursors.right.isDown ||
+                this.keys.D.isDown
+            ) {
+
+                velocityX = this.speed;
+            }
+
+            if (
+                this.cursors.down.isDown ||
+                this.keys.S.isDown
+            ) {
+
+                velocityY = this.speed;
+            }
         }
 
         this.setVelocity(
@@ -406,21 +405,6 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                 .normalize()
                 .scale(this.speed);
         }
-
-        const pointer = this.scene.input.activePointer;
-        const worldPoint = this.scene.cameras.main.getWorldPoint(
-            pointer.x,
-            pointer.y
-        );
-
-        const angle = Phaser.Math.Angle.Between(
-            this.x,
-            this.y,
-            worldPoint.x,
-            worldPoint.y
-        );
-
-        this.setRotation(angle + Math.PI / 2);
 
         // =========================
         // HUD

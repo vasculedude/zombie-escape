@@ -149,6 +149,11 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
         this.isPathfinding = false;
 
         this.animationTime = 0;
+        this.lastPosition = {
+            x,
+            y
+        };
+        this.stuckTimer = 0;
     }
 
     // =========================
@@ -298,6 +303,11 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
             return;
         }
 
+        const player = this.scene.player;
+        if (!player) {
+            return;
+        }
+
         if (
             this.pathIndex >=
             this.path.length
@@ -352,6 +362,29 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
             Math.sin(angle) *
             this.speed
         );
+
+        const directAngle =
+            Phaser.Math.Angle.Between(
+                this.x,
+                this.y,
+                player.x,
+                player.y
+            );
+
+        if (
+            this.body.velocity.length() < 5 &&
+            Phaser.Math.Distance.Between(
+                this.x,
+                this.y,
+                player.x,
+                player.y
+            ) > 20
+        ) {
+            this.setVelocity(
+                Math.cos(directAngle) * this.speed,
+                Math.sin(directAngle) * this.speed
+            );
+        }
     }
 
     // =========================
@@ -395,8 +428,27 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
             this.chaseDistance
         ) {
 
-            // Calculate a new path
-            //
+            const movedDistance = Phaser.Math.Distance.Between(
+                this.x,
+                this.y,
+                this.lastPosition.x,
+                this.lastPosition.y
+            );
+
+            if (movedDistance < 1) {
+                this.stuckTimer += this.scene.game.loop.delta;
+            } else {
+                this.stuckTimer = 0;
+            }
+
+            if (this.stuckTimer > 500) {
+                this.path = [];
+                this.pathIndex = 0;
+                this.pickNewDirection();
+                this.findPathToPlayer();
+                this.stuckTimer = 0;
+            }
+
             if (
                 this.scene.time.now >=
                 this.lastPathTime +
@@ -410,7 +462,21 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
                 this.findPathToPlayer();
             }
 
-            this.followPath();
+            if (!this.path || this.path.length === 0) {
+                const angle = Phaser.Math.Angle.Between(
+                    this.x,
+                    this.y,
+                    player.x,
+                    player.y
+                );
+
+                this.setVelocity(
+                    Math.cos(angle) * this.speed,
+                    Math.sin(angle) * this.speed
+                );
+            } else {
+                this.followPath();
+            }
 
         } else {
 
@@ -482,5 +548,8 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
             this.x,
             this.y - 35
         );
+
+        this.lastPosition.x = this.x;
+        this.lastPosition.y = this.y;
     }
 }

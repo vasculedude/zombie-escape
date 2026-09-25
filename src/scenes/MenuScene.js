@@ -5,21 +5,8 @@ export default class MenuScene extends Phaser.Scene {
         super('MenuScene');
     }
 
-    preload() {
-        this.load.audio('bgm', '/audio/zombie-escape-loop.wav');
-    }
-
     create() {
-        this.sound.pauseOnBlur = false;
-
-        this.bgm = this.sound.get('bgm') || this.sound.add('bgm', {
-            loop: true,
-            volume: 0.45
-        });
-
-        if (!this.bgm.isPlaying) {
-            this.bgm.play();
-        }
+        this.cameras.main.setBackgroundColor('#101010');
 
         // Game title
         this.add.text(400, 120, 'ZOMBIE ESCAPE', {
