@@ -7,6 +7,7 @@ import EasyStar from 'easystarjs';
 import Weapon from '../entities/Weapon.js';
 import AmmoPickup from '../entities/AmmoPickup.js';
 import MedKitPickup from '../entities/MedKitPickup.js';
+import CoinPickup from '../entities/CoinPickup.js';
 
 export default class GameScene extends Phaser.Scene {
 
@@ -60,6 +61,7 @@ export default class GameScene extends Phaser.Scene {
         );
 
         this.score = 0;
+        this.coins = 0;
 
         this.scoreText = this.add.text(
             this.cameras.main.width /
@@ -76,6 +78,24 @@ export default class GameScene extends Phaser.Scene {
         );
 
         this.scoreText
+            .setOrigin(1, 0)
+            .setDepth(200000);
+
+        this.coinsText = this.add.text(
+            this.cameras.main.width /
+                this.cameras.main.zoom - 20,
+            48,
+            'Coins: 0',
+            {
+                fontSize: '18px',
+                color: '#ffd45c',
+                fontStyle: 'bold',
+                stroke: '#000000',
+                strokeThickness: 4
+            }
+        );
+
+        this.coinsText
             .setOrigin(1, 0)
             .setDepth(200000);
 
@@ -198,12 +218,8 @@ export default class GameScene extends Phaser.Scene {
             450,
             420
         );
-
-        // Player ↔ house
-        this.physics.add.collider(
-            this.player,
-            this.house.body
-        );
+        this.obstacles = this.physics.add.staticGroup();
+        this.obstacles.add(this.house.body);
 
         // Block house for pathfinding
         this.blockPathfindingArea(
@@ -258,18 +274,19 @@ export default class GameScene extends Phaser.Scene {
             );
 
             this.trees.push(tree);
-
-            // Player ↔ tree
-            this.physics.add.collider(
-                this.player,
-                tree.body
-            );
+            this.obstacles.add(tree.body);
 
             // Block tree for pathfinding
             this.blockPathfindingArea(
                 tree.body
             );
         }
+
+        // Player ↔ obstacles
+        this.physics.add.collider(
+            this.player,
+            this.obstacles
+        );
         
       // =========================
 // WEAPON DROPS
@@ -334,6 +351,17 @@ this.time.addEvent({
     callback: () => {
         this.spawnMedKitNearPlayer();
         this.spawnMedKitNearPlayer();
+    },
+    loop: true
+});
+
+this.coinPickups = [];
+
+this.time.addEvent({
+    delay: 60000,
+    callback: () => {
+        this.spawnCoinNearPlayer();
+        this.spawnCoinNearPlayer();
     },
     loop: true
 });
@@ -413,6 +441,29 @@ this.time.addEvent({
         this.medKitPickups.push(pickup);
     }
 
+    spawnCoinNearPlayer() {
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const distance = Phaser.Math.Between(120, 900);
+        const x = Phaser.Math.Clamp(
+            this.player.x + Math.cos(angle) * distance,
+            35,
+            2965
+        );
+        const y = Phaser.Math.Clamp(
+            this.player.y + Math.sin(angle) * distance,
+            35,
+            2965
+        );
+
+        const pickup = new CoinPickup(this, x, y);
+        this.coinPickups.push(pickup);
+    }
+
+    addCoins(amount) {
+        this.coins += amount;
+        this.coinsText.setText(`Coins: ${this.coins}`);
+    }
+
     spawnZombieNearPlayer() {
 
         const angle = Phaser.Math.FloatBetween(
@@ -449,26 +500,14 @@ this.time.addEvent({
 
         this.zombies.push(zombie);
 
-        // Zombie and house
+        // Zombie and obstacles
         this.physics.add.collider(
             zombie,
-            this.house.body,
+            this.obstacles,
             () => {
                 zombie.pickNewDirection();
             }
         );
-
-        // Zombie and trees
-        for (const tree of this.trees) {
-
-            this.physics.add.collider(
-                zombie,
-                tree.body,
-                () => {
-                    zombie.pickNewDirection();
-                }
-            );
-        }
 
         // Zombie and player
         this.physics.add.collider(
@@ -487,6 +526,10 @@ this.time.addEvent({
         this.cameras.main.worldView.right - 20,
         this.cameras.main.worldView.top + 20
     );
+    this.coinsText.setPosition(
+        this.cameras.main.worldView.right - 20,
+        this.cameras.main.worldView.top + 48
+    );
 
     this.player.update();
 
@@ -499,8 +542,35 @@ this.time.addEvent({
 
     for (const projectile of [...this.projectiles]) {
 
-        if (projectile.active) {
+        if (projectile.active && projectile.body) {
             projectile.update();
+
+            if (!projectile.active || !projectile.body) {
+                continue;
+            }
+
+            const projectileBounds = new Phaser.Geom.Rectangle(
+                projectile.body.x,
+                projectile.body.y,
+                projectile.body.width,
+                projectile.body.height
+            );
+            const hitHouse =
+                Phaser.Geom.Intersects.RectangleToRectangle(
+                    projectileBounds,
+                    this.house.body.body
+                );
+            const hitTree = this.trees.some(tree =>
+                Phaser.Geom.Intersects.RectangleToRectangle(
+                    projectileBounds,
+                    tree.body.body
+                )
+            );
+
+            if (hitHouse || hitTree) {
+                projectile.destroy();
+                continue;
+            }
 
             // Check projectile against zombies
             for (const zombie of [...this.zombies]) {

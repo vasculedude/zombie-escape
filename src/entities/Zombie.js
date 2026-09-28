@@ -198,6 +198,7 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
             this.scene.scoreText.setText(
                 `Score: ${this.scene.score}`
             );
+            this.scene.addCoins(1);
 
             this.destroy();
 

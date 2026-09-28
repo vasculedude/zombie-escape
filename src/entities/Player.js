@@ -200,6 +200,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
     takeDamage(amount) {
 
+        if (this.health <= 0) {
+            return;
+        }
+
         this.health -= amount;
 
         if (this.health <= 0) {
@@ -224,6 +228,47 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                 .setOrigin(0.5)
                 .setScrollFactor(0)
                 .setDepth(200000);
+
+            const addDefeatButton = (label, x, onClick) => {
+                const button = this.scene.add.text(
+                    x,
+                    385,
+                    label,
+                    {
+                        fontSize: '20px',
+                        color: '#ffffff',
+                        fontStyle: 'bold',
+                        backgroundColor: '#333333',
+                        padding: {
+                            x: 20,
+                            y: 8
+                        }
+                    }
+                );
+
+                button
+                    .setOrigin(0.5)
+                    .setScrollFactor(0)
+                    .setDepth(200000)
+                    .setInteractive({ useHandCursor: true });
+
+                button.on('pointerover', () => {
+                    button.setStyle({ color: '#ffff00' });
+                });
+                button.on('pointerout', () => {
+                    button.setStyle({ color: '#ffffff' });
+                });
+                button.on('pointerdown', onClick);
+            };
+
+            addDefeatButton('HOME', 320, () => {
+                this.scene.scene.start('MenuScene');
+            });
+
+            addDefeatButton('PLAY AGAIN', 460, () => {
+                this.scene.physics.resume();
+                this.scene.scene.restart();
+            });
 
             this.scene.physics.pause();
 
@@ -365,6 +410,33 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
                 pickup.destroy();
                 this.scene.medKitPickups = this.scene.medKitPickups.filter(
+                    item => item !== pickup
+                );
+            }
+        }
+    }
+
+    tryPickupCoin() {
+        if (!this.scene.coinPickups) {
+            return;
+        }
+
+        for (const pickup of this.scene.coinPickups) {
+            if (!pickup.active) {
+                continue;
+            }
+
+            const distance = Phaser.Math.Distance.Between(
+                this.x,
+                this.y,
+                pickup.x,
+                pickup.y
+            );
+
+            if (distance < 35) {
+                this.scene.addCoins(pickup.amount);
+                pickup.destroy();
+                this.scene.coinPickups = this.scene.coinPickups.filter(
                     item => item !== pickup
                 );
             }
@@ -595,6 +667,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.tryPickupWeapon();
         this.tryPickupAmmo();
         this.tryPickupMedKit();
+        this.tryPickupCoin();
 
         // =========================
         // PUNCH

@@ -4,9 +4,69 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Zombie Escape 1</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            font-family: Georgia, 'Times New Roman', serif;
+            background: #101010;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            background: radial-gradient(circle at top, #273225, #101010 58%);
+            color: #f2f0df;
+        }
+
+        #auth-panel {
+            width: min(90vw, 360px);
+            padding: 32px;
+            border: 1px solid #59634d;
+            background: #171b17;
+            box-shadow: 0 18px 50px #0009;
+        }
+
+        h1 { margin: 0 0 8px; letter-spacing: 3px; }
+        p { color: #aeb6a3; }
+        label { display: block; margin-top: 18px; color: #cbd5bd; }
+        input, button {
+            box-sizing: border-box;
+            width: 100%;
+            margin-top: 7px;
+            padding: 12px;
+            border: 1px solid #59634d;
+            font: inherit;
+        }
+        input { background: #0e110e; color: #fff; }
+        button { cursor: pointer; background: #a6bd54; color: #101010; font-weight: bold; }
+        button:hover { background: #c2d975; }
+        #auth-switch { margin-top: 18px; background: transparent; color: #c2d975; border: 0; }
+        #auth-message { min-height: 1.4em; color: #ef9b82; }
+        #game { display: none; }
+    </style>
 </head>
 
 <body>
+    <main id="auth-panel">
+        <h1>ZOMBIE ESCAPE</h1>
+        <p id="auth-description">Sign in to enter the quarantine zone.</p>
+        <form id="auth-form">
+            <label>
+                Username
+                <input id="username" name="username" autocomplete="username" required minlength="3" maxlength="20">
+            </label>
+            <label>
+                Password
+                <input id="password" name="password" type="password" autocomplete="current-password" required minlength="8">
+            </label>
+            <p id="auth-message" role="alert"></p>
+            <button id="auth-submit" type="submit">SIGN IN</button>
+            <button id="auth-switch" type="button">Need an account? Register</button>
+        </form>
+    </main>
+    <div id="game"></div>
     <script type="module" src="/src/main.js"></script>
 </body>
 </html>
