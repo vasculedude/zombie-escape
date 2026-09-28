@@ -11,11 +11,16 @@ const httpServer = createServer(app);
 const users = new Map();
 const sessions = new Map();
 const sessionCookie = 'zombie_escape_session';
+const allowedOrigins = new Set([
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  process.env.CLIENT_ORIGIN
+].filter(Boolean));
 
 app.use(express.json());
 app.use((req, res, next) => {
   const allowedOrigin = req.headers.origin;
-  if (allowedOrigin === 'http://localhost:5173' || allowedOrigin === 'http://127.0.0.1:5173') {
+  if (allowedOrigins.has(allowedOrigin)) {
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
@@ -129,6 +134,8 @@ io.on('connection', (socket) => {
   });
 });
 
-httpServer.listen(3001, () => {
-  console.log('Zombie Escape server running on port 3001');
+const port = process.env.PORT || 3001;
+
+httpServer.listen(port, () => {
+  console.log(`Zombie Escape server running on port ${port}`);
 });

@@ -33,7 +33,7 @@ const authDescription = document.querySelector('#auth-description');
 const authMessage = document.querySelector('#auth-message');
 const authSubmit = document.querySelector('#auth-submit');
 const authSwitch = document.querySelector('#auth-switch');
-const apiUrl = `${window.location.protocol}//${window.location.hostname}:3001`;
+const apiUrl = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:3001`;
 let registerMode = false;
 
 function showGame() {
