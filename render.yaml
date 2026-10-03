@@ -7,4 +7,4 @@ services:
     startCommand: npm start
     envVars:
       - key: CLIENT_ORIGIN
-        value: https://vasculedude.github.io
+        value: https://vasculedude.github.io,https://www.vasculedude.github.io

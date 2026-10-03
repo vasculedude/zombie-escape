@@ -173,6 +173,7 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
     takeDamage(amount) {
 
         this.health -= amount;
+        this.scene.soundEffects?.playDamage();
 
         if (this.health <= 0) {
 
@@ -194,6 +195,7 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
                 );
             }
 
+            this.scene.soundEffects?.playDeath();
             this.scene.score++;
             this.scene.scoreText.setText(
                 `Score: ${this.scene.score}`

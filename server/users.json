@@ -14,5 +14,13 @@
   "demoUser999G": {
     "username": "demoUser999G",
     "passwordHash": "$2b$10$ot36HxX7tbGwABFwLmgdo.3e5JxFrYjB7h3KurbIv5K2O6Fu28pyi"
+  },
+  "glich": {
+    "username": "glich",
+    "passwordHash": "$2b$10$8PdqImX8gTg9xK6/pmXhvuqaj1Oukoy5CWe1v7yGZ8TUM4oTQnKoa"
+  },
+  "Glich": {
+    "username": "Glich",
+    "passwordHash": "$2b$10$OTUEyvocS7A8ar.R7uKXRulIKnXihplAMrgMsOgE5ixHSPYzrfu2u"
   }
 }

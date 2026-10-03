@@ -8,6 +8,8 @@ import Weapon from '../entities/Weapon.js';
 import AmmoPickup from '../entities/AmmoPickup.js';
 import MedKitPickup from '../entities/MedKitPickup.js';
 import CoinPickup from '../entities/CoinPickup.js';
+import GrenadePickup from '../entities/GrenadePickup.js';
+import createSoundEffects from '../utils/soundEffects.js';
 
 export default class GameScene extends Phaser.Scene {
 
@@ -16,6 +18,14 @@ export default class GameScene extends Phaser.Scene {
     }
 
     create() {
+
+        this.soundEffects = createSoundEffects();
+        this.input.on('pointerdown', () => {
+            this.soundEffects.unlock();
+        });
+        this.input.keyboard.on('keydown', () => {
+            this.soundEffects.unlock();
+        });
 
         // =========================
         // BACKGROUND
@@ -297,7 +307,8 @@ this.weapons = [];
 const weaponTypes = [
     'blaster',
     'rapid',
-    'heavy'
+    'heavy',
+    'sword'
 ];
 
 for (let i = 0; i < 22; i++) {
@@ -351,6 +362,16 @@ this.time.addEvent({
     callback: () => {
         this.spawnMedKitNearPlayer();
         this.spawnMedKitNearPlayer();
+    },
+    loop: true
+});
+
+this.grenadePickups = [];
+
+this.time.addEvent({
+    delay: 45000,
+    callback: () => {
+        this.spawnGrenadeNearPlayer();
     },
     loop: true
 });
@@ -457,6 +478,24 @@ this.time.addEvent({
 
         const pickup = new CoinPickup(this, x, y);
         this.coinPickups.push(pickup);
+    }
+
+    spawnGrenadeNearPlayer() {
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const distance = Phaser.Math.Between(180, 900);
+        const x = Phaser.Math.Clamp(
+            this.player.x + Math.cos(angle) * distance,
+            35,
+            2965
+        );
+        const y = Phaser.Math.Clamp(
+            this.player.y + Math.sin(angle) * distance,
+            35,
+            2965
+        );
+
+        const pickup = new GrenadePickup(this, x, y);
+        this.grenadePickups.push(pickup);
     }
 
     addCoins(amount) {

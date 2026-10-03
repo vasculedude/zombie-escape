@@ -15,13 +15,20 @@ const httpServer = createServer(app);
 const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  'https://vasculedude.github.io',
+  'https://www.vasculedude.github.io',
   ...(process.env.CLIENT_ORIGIN || '').split(',').map((origin) => origin.trim()).filter(Boolean)
 ];
 
 app.use((req, res, next) => {
   const origin = req.get('Origin');
+  const isAllowedOrigin = origin && (
+    allowedOrigins.includes(origin) ||
+    /^https:\/\/.*\.github\.io$/i.test(origin) ||
+    /^http:\/\/localhost(:\d+)?$/i.test(origin)
+  );
 
-  if (origin && allowedOrigins.includes(origin)) {
+  if (isAllowedOrigin) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
   }

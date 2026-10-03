@@ -73,6 +73,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
         this.speed = 200;
         this.facingAngle = 0;
+        this.soundEffects = this.scene.soundEffects;
 
         // =========================
         // HEALTH
@@ -111,6 +112,13 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.maxReserveAmmo = MAX_TOTAL_AMMO;
         this.reloadUntil = 0;
         this.reloadDelay = 1000;
+
+        this.swordDashCharges = 3;
+        this.maxSwordDashCharges = 3;
+        this.swordRechargeUntil = 0;
+
+        this.grenades = 0;
+        this.maxGrenades = 3;
 
         // =========================
         // PLAYER HP BAR
@@ -171,12 +179,29 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                 }
             );
 
+        this.grenadeText =
+            scene.add.text(
+                0,
+                0,
+                'G: 0',
+                {
+                    fontSize: '18px',
+                    color: '#ffb000',
+                    fontStyle: 'bold',
+                    stroke: '#000000',
+                    strokeThickness: 4
+                }
+            );
+
         this.weaponText.setDepth(200000);
         this.ammoText.setDepth(200000);
+        this.grenadeText.setDepth(200000);
         this.weaponText.setOrigin(0, 0);
         this.ammoText.setOrigin(0.5, 0);
+        this.grenadeText.setOrigin(0.5, 0);
         this.weaponText.setScrollFactor(1);
         this.ammoText.setScrollFactor(1);
+        this.grenadeText.setScrollFactor(1);
 
         // =========================
         // MOVEMENT
@@ -205,6 +230,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         }
 
         this.health -= amount;
+        this.soundEffects?.playDamage();
 
         if (this.health <= 0) {
 
@@ -271,6 +297,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             });
 
             this.scene.physics.pause();
+            this.soundEffects?.playDeath();
 
             return;
         }
@@ -309,6 +336,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                 this.weapon = weapon;
                 this.magazineAmmo = this.magazineSize;
                 this.reloadUntil = 0;
+
+                if (weapon.type === 'sword') {
+                    this.swordDashCharges = this.maxSwordDashCharges;
+                    this.swordRechargeUntil = 0;
+                }
 
                 if (this.heldWeapon) {
                     this.heldWeapon.destroy();
@@ -443,6 +475,162 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         }
     }
 
+    tryPickupGrenade() {
+        if (!this.scene.grenadePickups || this.grenades >= this.maxGrenades) {
+            return;
+        }
+
+        for (const pickup of this.scene.grenadePickups) {
+            if (!pickup.active) {
+                continue;
+            }
+
+            const distance = Phaser.Math.Distance.Between(
+                this.x,
+                this.y,
+                pickup.x,
+                pickup.y
+            );
+
+            if (distance < 35) {
+                this.grenades = Math.min(
+                    this.maxGrenades,
+                    this.grenades + pickup.amount
+                );
+
+                pickup.destroy();
+                this.scene.grenadePickups = this.scene.grenadePickups.filter(
+                    item => item !== pickup
+                );
+            }
+        }
+    }
+
+    explodeGrenade(x, y) {
+        const blastRadius = 120;
+        const blastGlow = this.scene.add.circle(x, y, 12, 0xffa500, 0.6);
+
+        this.scene.tweens.add({
+            targets: blastGlow,
+            radius: blastRadius,
+            alpha: 0,
+            duration: 350,
+            ease: 'Quad.easeOut',
+            onComplete: () => blastGlow.destroy()
+        });
+
+        this.soundEffects?.playExplosion();
+
+        for (const zombie of [...this.scene.zombies]) {
+            const distance = Phaser.Math.Distance.Between(
+                x,
+                y,
+                zombie.x,
+                zombie.y
+            );
+
+            if (distance <= blastRadius) {
+                const damage = 100 - (distance / blastRadius) * 70;
+                zombie.takeDamage(Math.max(20, damage));
+            }
+        }
+    }
+
+    throwGrenade() {
+        if (this.grenades <= 0) {
+            return;
+        }
+
+        this.grenades -= 1;
+
+        const pointer = this.scene.input.activePointer;
+        const worldPoint = this.scene.cameras.main.getWorldPoint(
+            pointer.x,
+            pointer.y
+        );
+
+        const grenadeMarker = this.scene.add.circle(
+            worldPoint.x,
+            worldPoint.y,
+            10,
+            0xff8c00,
+            0.8
+        );
+
+        grenadeMarker.setDepth(18);
+
+        this.scene.time.delayedCall(500, () => {
+            this.explodeGrenade(worldPoint.x, worldPoint.y);
+            grenadeMarker.destroy();
+        });
+    }
+
+    performSwordDash() {
+        const now = this.scene.time.now;
+
+        if (this.swordDashCharges <= 0) {
+            if (this.swordRechargeUntil !== 0 && now >= this.swordRechargeUntil) {
+                this.swordDashCharges = this.maxSwordDashCharges;
+                this.swordRechargeUntil = 0;
+            }
+            return;
+        }
+
+        if (this.weapon?.type !== 'sword') {
+            return;
+        }
+
+        const dashSpeed = 620;
+        const dashDistance = 170;
+        const dashLength = dashDistance;
+        const startX = this.x;
+        const startY = this.y;
+        const endX = this.x + Math.cos(this.facingAngle) * dashLength;
+        const endY = this.y + Math.sin(this.facingAngle) * dashLength;
+
+        this.swordDashCharges -= 1;
+        this.setVelocity(
+            Math.cos(this.facingAngle) * dashSpeed,
+            Math.sin(this.facingAngle) * dashSpeed
+        );
+
+        this.scene.time.delayedCall(220, () => {
+            this.setVelocity(0, 0);
+        });
+
+        const distanceToSegment = (px, py, x1, y1, x2, y2) => {
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const lengthSquared = dx * dx + dy * dy;
+            if (lengthSquared === 0) {
+                return Math.hypot(px - x1, py - y1);
+            }
+            const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lengthSquared));
+            const closestX = x1 + t * dx;
+            const closestY = y1 + t * dy;
+            return Math.hypot(px - closestX, py - closestY);
+        };
+
+        for (const zombie of [...this.scene.zombies]) {
+            const hitDistance = distanceToSegment(
+                zombie.x,
+                zombie.y,
+                startX,
+                startY,
+                endX,
+                endY
+            );
+
+            if (hitDistance < 26) {
+                zombie.takeDamage(100);
+            }
+        }
+
+        if (this.swordDashCharges <= 0) {
+            this.swordRechargeUntil = now + 5000;
+        }
+    }
+
     // =========================
     // SHOOT
     // =========================
@@ -450,6 +638,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     shoot() {
 
         if (!this.weapon) {
+            return;
+        }
+
+        if (this.weapon.type === 'sword') {
+            this.performSwordDash();
             return;
         }
 
@@ -478,6 +671,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
         this.lastShotTime = now;
         this.magazineAmmo -= 1;
+        this.soundEffects?.playShot();
 
         if (this.magazineAmmo === 0 && this.reserveAmmo > 0) {
             this.reloadUntil = now + this.reloadDelay;
@@ -632,7 +826,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.ammoText.setText(
             String(this.magazineAmmo + this.reserveAmmo)
         );
+        this.grenadeText.setText(`G: ${this.grenades}`);
         this.weaponText.setPosition(hudX, hudY + 26);
+        this.grenadeText.setPosition(hudX + 180, hudY + 26);
 
         const scoreText = this.scene.scoreText;
         const view = this.scene.cameras.main.worldView;
@@ -668,9 +864,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.tryPickupAmmo();
         this.tryPickupMedKit();
         this.tryPickupCoin();
+        this.tryPickupGrenade();
 
         // =========================
-        // PUNCH
+        // GRENADE / PUNCH
         // =========================
 
         if (
@@ -684,6 +881,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
             this.lastPunchTime =
                 this.scene.time.now;
+
+            if (this.grenades > 0) {
+                this.throwGrenade();
+                return;
+            }
 
             for (
                 const zombie of [

@@ -16,7 +16,9 @@ export default class Weapon extends Phaser.GameObjects.Image {
                 ? 0xffd43b
                 : type === 'rapid'
                     ? 0x25d9e8
-                    : 0xff8738;
+                    : type === 'sword'
+                        ? 0xc4c4c4
+                        : 0xff8738;
 
             graphics.fillStyle(0x20242a, 1);
             if (type === 'heavy') {
@@ -30,6 +32,10 @@ export default class Weapon extends Phaser.GameObjects.Image {
                 graphics.fillRect(30, 13, 16, 3);
                 graphics.fillRoundedRect(12, 16, 6, 10, 2);
                 graphics.fillRect(7, 4, 5, 3);
+            } else if (type === 'sword') {
+                graphics.fillRoundedRect(17, 2, 8, 22, 2);
+                graphics.fillRect(14, 22, 14, 6);
+                graphics.fillTriangle(12, 1, 24, 1, 18, 12);
             } else {
                 graphics.fillRoundedRect(9, 7, 24, 11, 3);
                 graphics.fillRect(31, 10, 14, 5);
@@ -38,8 +44,13 @@ export default class Weapon extends Phaser.GameObjects.Image {
 
             graphics.fillStyle(accent, 1);
             graphics.fillRoundedRect(16, 9, type === 'heavy' ? 10 : 9, 4, 2);
-            graphics.fillStyle(0xb8c3cc, 1);
-            graphics.fillRect(37, 9, type === 'rapid' ? 7 : 5, 2);
+            if (type === 'sword') {
+                graphics.fillStyle(0xdfe7f0, 1);
+                graphics.fillRect(15, 8, 12, 3);
+            } else {
+                graphics.fillStyle(0xb8c3cc, 1);
+                graphics.fillRect(37, 9, type === 'rapid' ? 7 : 5, 2);
+            }
 
             graphics.generateTexture(textureKey, 48, 32);
             graphics.destroy();
@@ -85,6 +96,13 @@ export default class Weapon extends Phaser.GameObjects.Image {
             this.range = 250;
             this.fireRate = 900;
             this.name = 'HEAVY BLASTER';
+
+        } else if (type === 'sword') {
+
+            this.damage = 100;
+            this.range = 120;
+            this.fireRate = 5000;
+            this.name = 'SWORD';
         }
 
         // =========================

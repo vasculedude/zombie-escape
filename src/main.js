@@ -37,7 +37,9 @@ const authMessage = document.querySelector('#auth-message');
 const submitButton = document.querySelector('#submit-button');
 const modeButtons = document.querySelectorAll('[data-mode]');
 const apiUrl = import.meta.env.VITE_AUTH_API_URL ||
-    (import.meta.env.PROD ? 'https://zombie-escape-api.onrender.com' : 'http://localhost:3001');
+    (window.location.hostname.includes('github.io')
+        ? 'https://zombie-escape-api.onrender.com'
+        : 'http://localhost:3001');
 let mode = 'login';
 
 function setMode(nextMode) {
