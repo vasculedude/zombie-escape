@@ -8,7 +8,12 @@
         :root {
             color-scheme: dark;
             font-family: Georgia, 'Times New Roman', serif;
-            background: #101010;
+            background: #10140f;
+            color: #f2f0df;
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
@@ -16,57 +21,224 @@
             min-height: 100vh;
             display: grid;
             place-items: center;
-            background: radial-gradient(circle at top, #273225, #101010 58%);
+            padding: 24px;
+            background: radial-gradient(ellipse at 18% 10%, #303b2b, #10140f 64%);
+        }
+
+        .auth-shell {
+            width: min(100%, 940px);
+            display: grid;
+            grid-template-columns: 1fr 0.85fr;
+            border: 1px solid #444b3b;
+            background: #181c16;
+            box-shadow: 0 24px 72px #0008;
+        }
+
+        .auth-intro {
+            min-height: 560px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: clamp(28px, 6vw, 64px);
+            border-right: 1px solid #444b3b;
+            background: repeating-linear-gradient(0deg, #ffffff06 0 1px, transparent 1px 40px), repeating-linear-gradient(90deg, #ffffff06 0 1px, transparent 1px 40px), linear-gradient(145deg, #293322, #171c15 72%);
+        }
+
+        .eyebrow,
+        .auth-footnote {
+            color: #bec78d;
+            font: 700 11px Arial, sans-serif;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .auth-intro h1 {
+            margin: 28px 0 18px;
+            font-size: clamp(42px, 6vw, 66px);
+            font-weight: 400;
+            line-height: 0.98;
+        }
+
+        .auth-intro p {
+            max-width: 310px;
+            margin: 0;
+            color: #c7c7b6;
+            font-size: 17px;
+            line-height: 1.6;
+        }
+
+        .auth-panel {
+            align-self: center;
+            padding: clamp(28px, 5vw, 54px);
+        }
+
+        .auth-panel h2 {
+            margin: 12px 0 8px;
+            font-size: 30px;
+            font-weight: 400;
+        }
+
+        .auth-subtitle {
+            margin: 0 0 25px;
+            color: #aaaE9e;
+            font: 14px/1.5 Arial, sans-serif;
+        }
+
+        .auth-tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+            margin-bottom: 24px;
+            padding: 4px;
+            border: 1px solid #3e4537;
+            background: #11140f;
+        }
+
+        .auth-tabs button {
+            min-height: 42px;
+            border: 0;
+            background: transparent;
+            color: #aaaE9e;
+            cursor: pointer;
+            font: 700 11px Arial, sans-serif;
+            letter-spacing: 1px;
+        }
+
+        .auth-tabs button[aria-pressed='true'] {
+            background: #39452e;
             color: #f2f0df;
         }
 
-        #auth-panel {
-            width: min(90vw, 360px);
-            padding: 32px;
-            border: 1px solid #59634d;
-            background: #171b17;
-            box-shadow: 0 18px 50px #0009;
+        .auth-form {
+            display: grid;
+            gap: 16px;
         }
 
-        h1 { margin: 0 0 8px; letter-spacing: 3px; }
-        p { color: #aeb6a3; }
-        label { display: block; margin-top: 18px; color: #cbd5bd; }
-        input, button {
-            box-sizing: border-box;
-            width: 100%;
-            margin-top: 7px;
-            padding: 12px;
-            border: 1px solid #59634d;
-            font: inherit;
+        .auth-form label {
+            display: grid;
+            gap: 8px;
+            color: #d8d5c5;
+            font: 700 12px Arial, sans-serif;
         }
-        input { background: #0e110e; color: #fff; }
-        button { cursor: pointer; background: #a6bd54; color: #101010; font-weight: bold; }
-        button:hover { background: #c2d975; }
-        #auth-switch { margin-top: 18px; background: transparent; color: #c2d975; border: 0; }
-        #auth-message { min-height: 1.4em; color: #ef9b82; }
-        #game { display: none; }
+
+        .auth-form input {
+            width: 100%;
+            height: 48px;
+            border: 1px solid #454c3d;
+            border-radius: 2px;
+            outline: none;
+            padding: 0 12px;
+            background: #10130f;
+            color: #f2f0df;
+            font: 15px Arial, sans-serif;
+        }
+
+        .auth-form input:focus {
+            border-color: #bec78d;
+        }
+
+        .auth-form input::placeholder {
+            color: #7f8576;
+        }
+
+        .submit-button {
+            min-height: 50px;
+            margin-top: 5px;
+            border: 1px solid #bec78d;
+            background: #bec78d;
+            color: #171b13;
+            cursor: pointer;
+            font: 700 12px Arial, sans-serif;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .submit-button:disabled {
+            cursor: wait;
+            opacity: 0.7;
+        }
+
+        .auth-message {
+            min-height: 20px;
+            margin: 0;
+            color: #c7c7b6;
+            font: 13px/1.5 Arial, sans-serif;
+        }
+
+        .auth-message[data-state='error'] {
+            color: #ef9b7e;
+        }
+
+        .auth-message[data-state='success'] {
+            color: #c8d58b;
+        }
+
+        @media (max-width: 700px) {
+            body {
+                padding: 12px;
+            }
+
+            .auth-shell {
+                grid-template-columns: 1fr;
+            }
+
+            .auth-intro {
+                min-height: 235px;
+                padding: 25px;
+                border-right: 0;
+                border-bottom: 1px solid #444b3b;
+            }
+
+            .auth-intro h1 {
+                margin: 18px 0 10px;
+                font-size: 42px;
+            }
+
+            .auth-intro p {
+                font-size: 15px;
+            }
+
+            .auth-footnote {
+                margin-top: 20px;
+            }
+
+            .auth-panel {
+                padding: 28px 25px;
+            }
+        }
     </style>
 </head>
 
 <body>
-    <main id="auth-panel">
-        <h1>ZOMBIE ESCAPE</h1>
-        <p id="auth-description">Sign in to enter the quarantine zone.</p>
-        <form id="auth-form">
-            <label>
-                Username
-                <input id="username" name="username" autocomplete="username" required minlength="3" maxlength="20">
-            </label>
-            <label>
-                Password
-                <input id="password" name="password" type="password" autocomplete="current-password" required minlength="8">
-            </label>
-            <p id="auth-message" role="alert"></p>
-            <button id="auth-submit" type="submit">SIGN IN</button>
-            <button id="auth-switch" type="button">Need an account? Register</button>
-        </form>
+    <main class="auth-shell" id="auth-panel">
+        <section class="auth-intro" aria-labelledby="game-title">
+            <span class="eyebrow">Zombie Escape / Safehouse 01</span>
+            <div>
+                <h1 id="game-title">STAY ALIVE.<br>GET OUT.</h1>
+                <p>The road is gone. The night is closing in. Make it to daylight.</p>
+            </div>
+            <span class="auth-footnote">No signal. No backup. Just you.</span>
+        </section>
+        <section class="auth-panel" aria-labelledby="auth-title">
+            <p class="eyebrow">Survivor registry</p>
+            <h2 id="auth-title">Welcome back</h2>
+            <p class="auth-subtitle" id="auth-subtitle">Sign in to continue your escape.</p>
+            <div class="auth-tabs" role="group" aria-label="Account action">
+                <button type="button" data-mode="login" aria-pressed="true">SIGN IN</button>
+                <button type="button" data-mode="register" aria-pressed="false">CREATE ACCOUNT</button>
+            </div>
+            <form class="auth-form" id="auth-form">
+                <label for="username">Username
+                    <input id="username" name="username" type="text" autocomplete="username" minlength="3" maxlength="16" pattern="[a-zA-Z0-9_]{3,16}" placeholder="3-16 letters, numbers, or _" required>
+                </label>
+                <label for="password">Password
+                    <input id="password" name="password" type="password" autocomplete="current-password" minlength="6" placeholder="At least 6 characters" required>
+                </label>
+                <button class="submit-button" id="submit-button" type="submit">Enter the safehouse</button>
+                <p class="auth-message" id="auth-message" role="status" aria-live="polite"></p>
+            </form>
+        </section>
     </main>
-    <div id="game"></div>
     <script type="module" src="/src/main.js"></script>
 </body>
 </html>

@@ -1,0 +1,18 @@
+{
+  "GliChEd": {
+    "username": "GliChEd",
+    "passwordHash": "$2b$10$uuGyZKoBJVEufhQv1J/e0O8BpR5iWoSE3yBx7tqrTEwF8gWPCaEA6"
+  },
+  "GliChed": {
+    "username": "GliChed",
+    "passwordHash": "$2b$10$68b7Fkn6kg6n5JXh760JM.eMcpWvzCRXPlklOrn86OELBSK8L7Qe."
+  },
+  "demoUser99": {
+    "username": "demoUser99",
+    "passwordHash": "$2b$10$jccdUlR2pDRCeZvsanRjku86etO7n4v0g4M.lOgOkjgyLpf7MPPFu"
+  },
+  "demoUser999G": {
+    "username": "demoUser999G",
+    "passwordHash": "$2b$10$ot36HxX7tbGwABFwLmgdo.3e5JxFrYjB7h3KurbIv5K2O6Fu28pyi"
+  }
+}

@@ -1,110 +1,143 @@
 import express from 'express';
 import { createServer } from 'http';
-import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'crypto';
-import { promisify } from 'util';
 import { Server } from 'socket.io';
+import bcrypt from 'bcryptjs';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const scrypt = promisify(scryptCallback);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 const httpServer = createServer(app);
 
-const users = new Map();
-const sessions = new Map();
-const sessionCookie = 'zombie_escape_session';
-const allowedOrigins = new Set([
+const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
-  process.env.CLIENT_ORIGIN
-].filter(Boolean));
+  ...(process.env.CLIENT_ORIGIN || '').split(',').map((origin) => origin.trim()).filter(Boolean)
+];
 
-app.use(express.json());
 app.use((req, res, next) => {
-  const allowedOrigin = req.headers.origin;
-  if (allowedOrigins.has(allowedOrigin)) {
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  const origin = req.get('Origin');
+
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
   }
+
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+
   next();
 });
 
-function getSessionUser(req) {
-  const cookies = req.headers.cookie?.split(';').map((cookie) => cookie.trim()) ?? [];
-  const sessionId = cookies.find((cookie) => cookie.startsWith(`${sessionCookie}=`))?.split('=')[1];
-  const username = sessionId ? sessions.get(sessionId) : undefined;
-  return username ? users.get(username) : undefined;
-}
-
-async function hashPassword(password, salt = randomBytes(16).toString('hex')) {
-  const hash = await scrypt(password, salt, 64);
-  return { salt, hash: hash.toString('hex') };
-}
-
-function setSession(res, username) {
-  const sessionId = randomUUID();
-  sessions.set(sessionId, username);
-  res.setHeader('Set-Cookie', `${sessionCookie}=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800`);
-}
-
-function publicUser(user) {
-  return { username: user.username };
-}
-
-app.get('/api/me', (req, res) => {
-  const user = getSessionUser(req);
-  res.json({ user: user ? publicUser(user) : null });
-});
-
-app.post('/api/register', async (req, res) => {
-  const username = String(req.body?.username ?? '').trim();
-  const password = String(req.body?.password ?? '');
-
-  if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-    return res.status(400).json({ error: 'Username must be 3-20 letters, numbers, or underscores.' });
-  }
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-  }
-  if (users.has(username.toLowerCase())) {
-    return res.status(409).json({ error: 'That username is already registered.' });
-  }
-
-  const passwordData = await hashPassword(password);
-  const user = { username, ...passwordData };
-  users.set(username.toLowerCase(), user);
-  setSession(res, username.toLowerCase());
-  res.status(201).json({ user: publicUser(user) });
-});
-
-app.post('/api/login', async (req, res) => {
-  const username = String(req.body?.username ?? '').trim().toLowerCase();
-  const password = String(req.body?.password ?? '');
-  const user = users.get(username);
-
-  if (!user) return res.status(401).json({ error: 'Invalid username or password.' });
-
-  const { hash } = await hashPassword(password, user.salt);
-  const matches = timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(user.hash, 'hex'));
-  if (!matches) return res.status(401).json({ error: 'Invalid username or password.' });
-
-  setSession(res, username);
-  res.json({ user: publicUser(user) });
-});
-
-app.post('/api/logout', (req, res) => {
-  const cookies = req.headers.cookie?.split(';').map((cookie) => cookie.trim()) ?? [];
-  const sessionId = cookies.find((cookie) => cookie.startsWith(`${sessionCookie}=`))?.split('=')[1];
-  if (sessionId) sessions.delete(sessionId);
-  res.setHeader('Set-Cookie', `${sessionCookie}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
-  res.sendStatus(204);
-});
+app.use(express.json());
 
 const io = new Server(httpServer, {
   cors: { origin: "*" }
 });
 
+const usersFile = path.join(__dirname, 'users.json');
+
+if (!fs.existsSync(usersFile)) {
+  fs.writeFileSync(usersFile, JSON.stringify({}, null, 2));
+}
+
+function loadUsers() {
+  return JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+}
+
+function saveUsers(users) {
+  fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+}
+
+// CREATE ACCOUNT
+app.post('/register', async (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({
+      success: false,
+      message: 'Username and password are required.'
+    });
+  }
+
+  if (!/^[a-zA-Z0-9_]{3,16}$/.test(username)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Username must be 3-16 characters and use only letters, numbers, or _.'
+    });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({
+      success: false,
+      message: 'Password must be at least 6 characters.'
+    });
+  }
+
+  const users = loadUsers();
+
+  if (users[username]) {
+    return res.status(409).json({
+      success: false,
+      message: 'That username already exists.'
+    });
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  users[username] = {
+    username,
+    passwordHash
+  };
+
+  saveUsers(users);
+
+  res.json({
+    success: true,
+    message: 'Account created!'
+  });
+});
+
+// LOGIN
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  const users = loadUsers();
+  const user = users[username];
+
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Incorrect username or password.'
+    });
+  }
+
+  const passwordCorrect = await bcrypt.compare(
+    password,
+    user.passwordHash
+  );
+
+  if (!passwordCorrect) {
+    return res.status(401).json({
+      success: false,
+      message: 'Incorrect username or password.'
+    });
+  }
+
+  res.json({
+    success: true,
+    username: user.username
+  });
+});
+
+// MULTIPLAYER
 const players = {};
 
 io.on('connection', (socket) => {
@@ -114,7 +147,7 @@ io.on('connection', (socket) => {
     id: socket.id,
     x: 400,
     y: 300,
-    name: "Player"
+    name: 'Player'
   };
 
   socket.emit('currentPlayers', players);
@@ -122,14 +155,18 @@ io.on('connection', (socket) => {
 
   socket.on('playerMove', (data) => {
     if (!players[socket.id]) return;
+
     players[socket.id].x = data.x;
     players[socket.id].y = data.y;
+
     socket.broadcast.emit('playerMoved', players[socket.id]);
   });
 
   socket.on('disconnect', () => {
     delete players[socket.id];
+
     io.emit('playerLeft', socket.id);
+
     console.log('Player left:', socket.id);
   });
 });
