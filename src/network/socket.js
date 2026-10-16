@@ -1,9 +1,9 @@
 import { io } from 'socket.io-client';
 
-const socketUrl = window.location.hostname.includes('github.io')
-  ? 'https://zombie-escape-api.onrender.com'
-  : 'http://localhost:3001';
+const SERVER_URL = import.meta.env.DEV
+    ? 'http://localhost:3001'
+    : 'https://zombie-escape-2qlc.onrender.com';
 
-export const socket = io(socketUrl, {
-  transports: ['websocket', 'polling']
+export const socket = io(SERVER_URL, {
+    transports: ['websocket', 'polling']
 });

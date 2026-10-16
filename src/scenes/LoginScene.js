@@ -156,7 +156,11 @@ export default class LoginScene extends Phaser.Scene {
         this.statusText.setText('Connecting to server...');
 
         try {
-            const response = await fetch(`http://${window.location.hostname}:3001${endpoint}`, {
+            const SERVER_URL = import.meta.env.DEV
+                ? 'http://localhost:3001'
+                : 'https://zombie-escape-2qlc.onrender.com';
+
+            const response = await fetch(`${SERVER_URL}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
