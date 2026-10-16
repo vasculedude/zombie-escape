@@ -116,6 +116,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.swordDashCharges = 3;
         this.maxSwordDashCharges = 3;
         this.swordRechargeUntil = 0;
+        this.swordSwing = null;
 
         this.grenades = 0;
         this.maxGrenades = 3;
@@ -230,7 +231,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         }
 
         this.health -= amount;
-        this.soundEffects?.playDamage();
+        this.soundEffects?.playHumanDamage();
 
         if (this.health <= 0) {
 
@@ -568,6 +569,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     performSwordDash() {
         const now = this.scene.time.now;
 
+        if (this.swordSwing) {
+            return;
+        }
+
         if (this.swordDashCharges <= 0) {
             if (this.swordRechargeUntil !== 0 && now >= this.swordRechargeUntil) {
                 this.swordDashCharges = this.maxSwordDashCharges;
@@ -580,51 +585,12 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             return;
         }
 
-        const dashSpeed = 620;
-        const dashDistance = 170;
-        const dashLength = dashDistance;
-        const startX = this.x;
-        const startY = this.y;
-        const endX = this.x + Math.cos(this.facingAngle) * dashLength;
-        const endY = this.y + Math.sin(this.facingAngle) * dashLength;
-
         this.swordDashCharges -= 1;
-        this.setVelocity(
-            Math.cos(this.facingAngle) * dashSpeed,
-            Math.sin(this.facingAngle) * dashSpeed
-        );
-
-        this.scene.time.delayedCall(220, () => {
-            this.setVelocity(0, 0);
-        });
-
-        const distanceToSegment = (px, py, x1, y1, x2, y2) => {
-            const dx = x2 - x1;
-            const dy = y2 - y1;
-            const lengthSquared = dx * dx + dy * dy;
-            if (lengthSquared === 0) {
-                return Math.hypot(px - x1, py - y1);
-            }
-            const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lengthSquared));
-            const closestX = x1 + t * dx;
-            const closestY = y1 + t * dy;
-            return Math.hypot(px - closestX, py - closestY);
+        this.swordSwing = {
+            angle: this.facingAngle,
+            startedAt: now,
+            projectileFired: false
         };
-
-        for (const zombie of [...this.scene.zombies]) {
-            const hitDistance = distanceToSegment(
-                zombie.x,
-                zombie.y,
-                startX,
-                startY,
-                endX,
-                endY
-            );
-
-            if (hitDistance < 26) {
-                zombie.takeDamage(100);
-            }
-        }
 
         if (this.swordDashCharges <= 0) {
             this.swordRechargeUntil = now + 5000;
@@ -721,11 +687,59 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.setRotation(angle + Math.PI / 2);
 
         if (this.heldWeapon && this.heldWeapon.active) {
-            this.heldWeapon.setPosition(
-                this.x + Math.cos(angle) * 13,
-                this.y + Math.sin(angle) * 13
-            );
-            this.heldWeapon.setRotation(angle);
+            if (this.swordSwing) {
+                const elapsed = this.scene.time.now - this.swordSwing.startedAt;
+                const spinDuration = 280;
+
+                if (elapsed < spinDuration) {
+                    const spinAngle = this.swordSwing.angle +
+                        (elapsed / spinDuration) * Math.PI * 3;
+                    this.heldWeapon.setPosition(
+                        this.x + Math.cos(spinAngle) * 32,
+                        this.y + Math.sin(spinAngle) * 32
+                    );
+                    this.heldWeapon.setRotation(spinAngle + Math.PI / 2);
+                } else {
+                    this.heldWeapon.setPosition(
+                        this.x + Math.cos(this.swordSwing.angle) * 38,
+                        this.y + Math.sin(this.swordSwing.angle) * 38
+                    );
+                    this.heldWeapon.setRotation(this.swordSwing.angle + Math.PI / 2);
+
+                    if (!this.swordSwing.projectileFired) {
+                        const strikeX = this.x + Math.cos(this.swordSwing.angle) * 38;
+                        const strikeY = this.y + Math.sin(this.swordSwing.angle) * 38;
+                        const energyBall = new Projectile(
+                            this.scene,
+                            strikeX,
+                            strikeY,
+                            this.swordSwing.angle,
+                            this.weapon.damage,
+                            420,
+                            {
+                                type: 'energy',
+                                size: 36,
+                                speed: 460,
+                                hitRadius: 20
+                            }
+                        );
+
+                        this.scene.projectiles.push(energyBall);
+                        this.swordSwing.projectileFired = true;
+                    }
+                }
+
+                if (elapsed >= 420) {
+                    this.swordSwing = null;
+                }
+            } else {
+                this.heldWeapon.setPosition(
+                    this.x + Math.cos(angle) * 13,
+                    this.y + Math.sin(angle) * 13
+                );
+                this.heldWeapon.setRotation(angle);
+            }
+
             this.heldWeapon.setDepth(this.depth + 1);
         }
 

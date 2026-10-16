@@ -626,7 +626,7 @@ this.time.addEvent({
                         zombie.y
                     );
 
-                if (distance < 25) {
+                if (distance < projectile.hitRadius) {
 
                     zombie.takeDamage(
                         projectile.damage

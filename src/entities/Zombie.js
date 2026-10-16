@@ -173,7 +173,7 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
     takeDamage(amount) {
 
         this.health -= amount;
-        this.scene.soundEffects?.playDamage();
+        this.scene.soundEffects?.playZombieDamage();
 
         if (this.health <= 0) {
 
