@@ -45,11 +45,14 @@ if (!fs.existsSync(usersFile)) {
 }
 
 function readUsers() {
-    return JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+    const users = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+    console.log('Users file read. Account count:', Object.keys(users).length);
+    return users;
 }
 
 function saveUsers(users) {
     fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+    console.log('Users file written. Account count:', Object.keys(users).length);
 }
 
 // REGISTER
