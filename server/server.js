@@ -98,7 +98,7 @@ app.post('/register', async (req, res) => {
         };
 
         saveUsers(users);
-
+        console.log('Registration saved for:', usernameKey);
         return res.status(201).json({
             success: true,
             message: 'Account created!'
