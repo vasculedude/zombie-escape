@@ -132,7 +132,12 @@ app.post('/login', async (req, res) => {
         const user = users[username.toLowerCase()] || Object.values(users).find(
             item => item.username.toLowerCase() === username.toLowerCase()
         );
-
+       console.log(
+    'Login lookup:',
+    username.toLowerCase(),
+    'User found:',
+    !!user
+);
         if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
             return res.status(401).json({
                 success: false,
