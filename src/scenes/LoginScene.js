@@ -189,7 +189,7 @@ export default class LoginScene extends Phaser.Scene {
             });
         } catch (error) {
             this.statusText.setText(
-                'Cannot reach the server. Is it running on port 3001?'
+                'Cannot reach the online server. Please try again shortly BLAH BLAH blah blah blah.'
             );
         }
     }

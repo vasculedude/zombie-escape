@@ -3,12 +3,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import bcrypt from 'bcryptjs';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import pg from 'pg';
 
 const app = express();
 app.use(express.json());
@@ -37,22 +32,25 @@ app.use(cors({
     credentials: true
 }));
 
-const usersFile = path.join(__dirname, 'users.json');
+const { Pool } = pg;
 
-// Create the user database if it doesn't exist.
-if (!fs.existsSync(usersFile)) {
-    fs.writeFileSync(usersFile, JSON.stringify([], null, 2));
-}
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
+});
 
-function readUsers() {
-    const users = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
-    console.log('Users file read. Account count:', Object.keys(users).length);
-    return users;
-}
+async function initialiseDatabase() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+            username_key VARCHAR(16) PRIMARY KEY,
+            username VARCHAR(16) NOT NULL,
+            password_hash TEXT NOT NULL
+        )
+    `);
 
-function saveUsers(users) {
-    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
-    console.log('Users file written. Account count:', Object.keys(users).length);
+    console.log('Neon database connected and ready!');
 }
 
 // REGISTER
@@ -81,27 +79,27 @@ app.post('/register', async (req, res) => {
             });
         }
 
-        const users = readUsers();
         const usernameKey = username.toLowerCase();
 
-        if (users[usernameKey] || Object.values(users).some(user =>
-            user.username.toLowerCase() === usernameKey
-        )) {
+        const existing = await pool.query(
+            'SELECT username_key FROM users WHERE username_key = $1',
+            [usernameKey]
+        );
+
+        if (existing.rows.length > 0) {
             return res.status(409).json({
                 success: false,
                 message: 'That username is already taken.'
             });
         }
-
         const passwordHash = await bcrypt.hash(password, 10);
 
-        users[usernameKey] = {
-            username,
-            passwordHash
-        };
+        await pool.query(
+            'INSERT INTO users (username_key, username, password_hash) VALUES ($1, $2, $3)',
+            [usernameKey, username, passwordHash]
+        );
 
-        saveUsers(users);
-        console.log('Registration saved for:', usernameKey);
+        console.log('Registration saved in Neon:', usernameKey);
         return res.status(201).json({
             success: true,
             message: 'Account created!'
@@ -130,18 +128,14 @@ app.post('/login', async (req, res) => {
             });
         }
 
-        const users = readUsers();
-
-        const user = users[username.toLowerCase()] || Object.values(users).find(
-            item => item.username.toLowerCase() === username.toLowerCase()
+        const result = await pool.query(
+            'SELECT username, password_hash FROM users WHERE username_key = $1',
+            [username.toLowerCase()]
         );
-       console.log(
-    'Login lookup:',
-    username.toLowerCase(),
-    'User found:',
-    !!user
-);
-        if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+
+        const user = result.rows[0];
+
+        if (!user || !(await bcrypt.compare(password, user.password_hash))) {
             return res.status(401).json({
                 success: false,
                 message: 'Incorrect username or password.'
@@ -205,8 +199,15 @@ io.on('connection', (socket) => {
     });
 });
 
-const port = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3001;
 
-httpServer.listen(port, () => {
-    console.log(`Zombie Escape server running on port ${port}`);
-});
+initialiseDatabase()
+    .then(() => {
+        httpServer.listen(PORT, '0.0.0.0', () => {
+            console.log(`Server running on port ${PORT}`);
+        });
+    })
+    .catch(error => {
+        console.error('Database startup failed:', error);
+        process.exit(1);
+    });
