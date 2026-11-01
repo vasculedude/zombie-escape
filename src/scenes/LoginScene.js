@@ -182,6 +182,8 @@ export default class LoginScene extends Phaser.Scene {
             }
 
             this.registry.set('username', result.username);
+            this.registry.set('authToken', result.token);
+            this.registry.set('coins', result.coins);
             this.statusText.setText(`Welcome, ${result.username}!`);
 
             this.time.delayedCall(700, () => {

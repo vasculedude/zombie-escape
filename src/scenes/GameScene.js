@@ -71,7 +71,7 @@ export default class GameScene extends Phaser.Scene {
         );
 
         this.score = 0;
-        this.coins = 0;
+        this.coins = this.registry.get('coins') || 0;
 
         this.scoreText = this.add.text(
             this.cameras.main.width /
@@ -95,7 +95,7 @@ export default class GameScene extends Phaser.Scene {
             this.cameras.main.width /
                 this.cameras.main.zoom - 20,
             48,
-            'Coins: 0',
+            `Coins: ${this.coins}`,
             {
                 fontSize: '18px',
                 color: '#ffd45c',
@@ -108,6 +108,8 @@ export default class GameScene extends Phaser.Scene {
         this.coinsText
             .setOrigin(1, 0)
             .setDepth(200000);
+
+        this.loadCoins();
 
         // =========================
         // GROUND
@@ -498,9 +500,66 @@ this.time.addEvent({
         this.grenadePickups.push(pickup);
     }
 
-    addCoins(amount) {
-        this.coins += amount;
-        this.coinsText.setText(`Coins: ${this.coins}`);
+    async loadCoins() {
+        const token = this.registry.get('authToken');
+
+        if (!token) return;
+
+        const SERVER_URL = import.meta.env.DEV
+            ? 'http://localhost:3001'
+            : 'https://zombie-escape-2qlc.onrender.com';
+
+        try {
+            const response = await fetch(`${SERVER_URL}/coins`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                this.coins = result.coins;
+                this.registry.set('coins', this.coins);
+                this.coinsText.setText(`Coins: ${this.coins}`);
+            }
+        } catch (error) {
+            console.error('Could not load coins:', error);
+        }
+    }
+
+    async addCoins(amount) {
+        const token = this.registry.get('authToken');
+
+        if (!token) return;
+
+        const SERVER_URL = import.meta.env.DEV
+            ? 'http://localhost:3001'
+            : 'https://zombie-escape-2qlc.onrender.com';
+
+        try {
+            const response = await fetch(`${SERVER_URL}/coins/add`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ amount })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                console.error('Could not save coins:', result.message);
+                return;
+            }
+
+            this.coins = result.coins;
+            this.registry.set('coins', this.coins);
+            this.coinsText.setText(`Coins: ${this.coins}`);
+        } catch (error) {
+            console.error('Coin saving error:', error);
+        }
     }
 
     spawnZombieNearPlayer() {

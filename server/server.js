@@ -3,6 +3,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import pg from 'pg';
 
 const app = express();
@@ -28,7 +29,7 @@ app.use(cors({
         }
     },
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
 }));
 
@@ -46,8 +47,20 @@ async function initialiseDatabase() {
         CREATE TABLE IF NOT EXISTS users (
             username_key VARCHAR(16) PRIMARY KEY,
             username VARCHAR(16) NOT NULL,
-            password_hash TEXT NOT NULL
+            password_hash TEXT NOT NULL,
+            coins INTEGER NOT NULL DEFAULT 0,
+            session_token TEXT
         )
+    `);
+
+    await pool.query(`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS coins INTEGER NOT NULL DEFAULT 0
+    `);
+
+    await pool.query(`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS session_token TEXT
     `);
 
     console.log('Neon database connected and ready!');
@@ -129,7 +142,7 @@ app.post('/login', async (req, res) => {
         }
 
         const result = await pool.query(
-            'SELECT username, password_hash FROM users WHERE username_key = $1',
+            'SELECT username, password_hash, coins FROM users WHERE username_key = $1',
             [username.toLowerCase()]
         );
 
@@ -142,9 +155,21 @@ app.post('/login', async (req, res) => {
             });
         }
 
+        const token = randomBytes(32).toString('hex');
+
+        const updatedUser = await pool.query(
+            `UPDATE users
+             SET session_token = $1
+             WHERE username_key = $2
+             RETURNING coins`,
+            [token, username.toLowerCase()]
+        );
+
         return res.json({
             success: true,
-            username: user.username
+            username: user.username,
+            token,
+            coins: updatedUser.rows[0].coins
         });
     } catch (error) {
         console.error('Login error:', error);
@@ -152,6 +177,79 @@ app.post('/login', async (req, res) => {
             success: false,
             message: 'Could not log in.'
         });
+    }
+});
+
+// CHECK LOGIN TOKEN
+async function authenticate(req, res, next) {
+    try {
+        const authHeader = req.headers.authorization || '';
+        const token = authHeader.startsWith('Bearer ')
+            ? authHeader.slice(7)
+            : '';
+
+        if (!token) {
+            return res.status(401).json({
+                success: false,
+                message: 'Please log in again.'
+            });
+        }
+
+        const result = await pool.query(
+            'SELECT username_key, coins FROM users WHERE session_token = $1',
+            [token]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid login. Please log in again.'
+            });
+        }
+
+        req.user = result.rows[0];
+        next();
+    } catch (error) {
+        console.error('Authentication error:', error);
+        res.status(500).json({ success: false });
+    }
+}
+
+// LOAD COINS
+app.get('/coins', authenticate, (req, res) => {
+    res.json({
+        success: true,
+        coins: req.user.coins
+    });
+});
+
+// ADD COINS
+app.post('/coins/add', authenticate, async (req, res) => {
+    try {
+        const amount = req.body?.amount;
+
+        if (!Number.isInteger(amount) || amount < 1 || amount > 100) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid coin amount.'
+            });
+        }
+
+        const result = await pool.query(
+            `UPDATE users
+             SET coins = coins + $1
+             WHERE username_key = $2
+             RETURNING coins`,
+            [amount, req.user.username_key]
+        );
+
+        res.json({
+            success: true,
+            coins: result.rows[0].coins
+        });
+    } catch (error) {
+        console.error('Coin saving error:', error);
+        res.status(500).json({ success: false });
     }
 });
 
