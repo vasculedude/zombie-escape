@@ -11,6 +11,7 @@ import CoinPickup from '../entities/CoinPickup.js';
 import GrenadePickup from '../entities/GrenadePickup.js';
 import createSoundEffects from '../utils/soundEffects.js';
 import { getSurvivalCoinReward } from '../utils/coinRewards.js';
+import { getSpawnableWeaponIds } from '../utils/weaponCatalog.js';
 
 export default class GameScene extends Phaser.Scene {
 
@@ -293,14 +294,11 @@ export default class GameScene extends Phaser.Scene {
 
 this.weapons = [];
 
-const weaponTypes = [
-    'blaster',
-    'rapid',
-    'heavy',
-    'sword'
-];
+const weaponTypes = getSpawnableWeaponIds(
+    this.registry.get('ownedWeapons')
+);
 
-for (let i = 0; i < 22; i++) {
+for (let i = 0; i < 22 && weaponTypes.length > 0; i++) {
 
     const x = Phaser.Math.Between(
         100,

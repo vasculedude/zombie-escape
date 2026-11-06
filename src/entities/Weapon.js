@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getWeaponById } from '../utils/weaponCatalog.js';
 
 export default class Weapon extends Phaser.GameObjects.Image {
 
@@ -6,50 +7,76 @@ export default class Weapon extends Phaser.GameObjects.Image {
         const textureKey = `weapon-${type}`;
 
         if (!scene.textures.exists(textureKey)) {
+            const weapon = getWeaponById(type);
+            if (!weapon) {
+                throw new RangeError(`Unknown weapon type: ${type}`);
+            }
+
             const graphics = scene.make.graphics({
                 x: 0,
                 y: 0,
                 add: false
             });
 
-            const accent = type === 'blaster'
-                ? 0xffd43b
-                : type === 'rapid'
-                    ? 0x25d9e8
-                    : type === 'sword'
-                        ? 0xc4c4c4
-                        : 0xff8738;
+            const accent = weapon.category === 'Melee'
+                ? 0xc4c4c4
+                : type === 'blaster'
+                    ? 0xffd43b
+                    : type === 'rapid'
+                        ? 0x25d9e8
+                        : type === 'sword'
+                            ? 0xc4c4c4
+                            : 0xff8738;
 
-            graphics.fillStyle(0x20242a, 1);
-            if (type === 'heavy') {
-                graphics.fillRoundedRect(5, 5, 29, 14, 3);
-                graphics.fillRect(31, 8, 15, 8);
-                graphics.fillRoundedRect(12, 15, 8, 13, 2);
-                graphics.fillRect(38, 6, 4, 2);
-            } else if (type === 'rapid') {
-                graphics.fillRoundedRect(7, 7, 25, 10, 3);
-                graphics.fillRect(30, 8, 16, 3);
-                graphics.fillRect(30, 13, 16, 3);
-                graphics.fillRoundedRect(12, 16, 6, 10, 2);
-                graphics.fillRect(7, 4, 5, 3);
-            } else if (type === 'sword') {
-                graphics.fillRoundedRect(17, 2, 8, 22, 2);
-                graphics.fillRect(14, 22, 14, 6);
-                graphics.fillTriangle(12, 1, 24, 1, 18, 12);
+            if (weapon.category === 'Melee') {
+                graphics.fillStyle(0x704b2b, 1);
+                graphics.fillRoundedRect(21, 14, 6, 16, 2);
+                graphics.fillStyle(accent, 1);
+                if (type === 'baseball_bat') {
+                    graphics.fillRoundedRect(17, 2, 14, 23, 6);
+                    graphics.fillRect(19, 20, 10, 5);
+                } else if (type === 'crowbar') {
+                    graphics.fillRect(19, 4, 10, 4);
+                    graphics.fillRect(19, 5, 4, 17);
+                    graphics.fillRect(17, 20, 8, 4);
+                } else if (type === 'hammer') {
+                    graphics.fillRect(21, 4, 6, 21);
+                    graphics.fillRoundedRect(11, 3, 26, 8, 2);
+                } else if (type === 'sword') {
+                    graphics.fillStyle(0xc4c4c4, 1);
+                    graphics.fillRoundedRect(17, 2, 8, 22, 2);
+                    graphics.fillRect(14, 22, 14, 6);
+                    graphics.fillTriangle(12, 1, 24, 1, 18, 12);
+                } else {
+                    graphics.fillTriangle(24, 1, 14, 20, 34, 20);
+                    graphics.fillRect(21, 18, 6, 11);
+                }
             } else {
-                graphics.fillRoundedRect(9, 7, 24, 11, 3);
-                graphics.fillRect(31, 10, 14, 5);
-                graphics.fillRoundedRect(15, 17, 7, 11, 2);
-            }
-
-            graphics.fillStyle(accent, 1);
-            graphics.fillRoundedRect(16, 9, type === 'heavy' ? 10 : 9, 4, 2);
-            if (type === 'sword') {
-                graphics.fillStyle(0xdfe7f0, 1);
-                graphics.fillRect(15, 8, 12, 3);
-            } else {
+                graphics.fillStyle(0x20242a, 1);
+                if (type === 'shotgun') {
+                    graphics.fillRoundedRect(6, 8, 28, 12, 3);
+                    graphics.fillRect(30, 10, 17, 4);
+                    graphics.fillRoundedRect(12, 17, 8, 12, 2);
+                } else if (type === 'assault_rifle') {
+                    graphics.fillRoundedRect(5, 8, 29, 12, 3);
+                    graphics.fillRect(32, 9, 15, 4);
+                    graphics.fillRect(18, 19, 5, 9);
+                    graphics.fillRect(7, 4, 8, 4);
+                } else if (type === 'sniper_rifle') {
+                    graphics.fillRoundedRect(3, 9, 34, 9, 3);
+                    graphics.fillRect(35, 11, 12, 3);
+                    graphics.fillRect(13, 18, 4, 10);
+                    graphics.fillRect(19, 5, 11, 3);
+                    graphics.fillRect(22, 7, 4, 3);
+                } else {
+                    graphics.fillRoundedRect(10, 9, 24, 11, 3);
+                    graphics.fillRect(32, 12, 13, 4);
+                    graphics.fillRoundedRect(15, 18, 7, 10, 2);
+                }
+                graphics.fillStyle(accent, 1);
+                graphics.fillRect(16, 10, 9, 3);
                 graphics.fillStyle(0xb8c3cc, 1);
-                graphics.fillRect(37, 9, type === 'rapid' ? 7 : 5, 2);
+                graphics.fillRect(38, 10, 6, 2);
             }
 
             graphics.generateTexture(textureKey, 48, 32);
@@ -70,40 +97,19 @@ export default class Weapon extends Phaser.GameObjects.Image {
 
         scene.add.existing(this);
 
-        this.type = type;
-
-        // =========================
-        // WEAPON STATS
-        // =========================
-
-        if (type === 'blaster') {
-
-            this.damage = 20;
-            this.range = 300;
-            this.fireRate = 500;
-            this.name = 'BLASTER';
-
-        } else if (type === 'rapid') {
-
-            this.damage = 10;
-            this.range = 350;
-            this.fireRate = 150;
-            this.name = 'RAPID BLASTER';
-
-        } else if (type === 'heavy') {
-
-            this.damage = 40;
-            this.range = 250;
-            this.fireRate = 900;
-            this.name = 'HEAVY BLASTER';
-
-        } else if (type === 'sword') {
-
-            this.damage = 100;
-            this.range = 120;
-            this.fireRate = 5000;
-            this.name = 'SWORD';
+        const weapon = getWeaponById(type);
+        if (!weapon) {
+            throw new RangeError(`Unknown weapon type: ${type}`);
         }
+
+        this.type = type;
+        this.name = weapon.name.toUpperCase();
+        this.damage = weapon.damage;
+        this.range = weapon.range;
+        this.fireRate = weapon.fireRate;
+        this.magazineSize = weapon.magazineSize || 0;
+        this.pellets = weapon.pellets || 1;
+        this.isMelee = weapon.category === 'Melee';
 
         // =========================
         // VISUAL

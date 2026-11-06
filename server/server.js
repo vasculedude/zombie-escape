@@ -5,6 +5,7 @@ import { Server } from 'socket.io';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import pg from 'pg';
+import { WEAPON_CATALOG, WEAPON_PRICE } from './weaponCatalog.js';
 
 const app = express();
 app.use(express.json());
@@ -61,6 +62,11 @@ async function initialiseDatabase() {
     await pool.query(`
         ALTER TABLE users
         ADD COLUMN IF NOT EXISTS session_token TEXT
+    `);
+
+    await pool.query(`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS owned_weapons TEXT[] NOT NULL DEFAULT '{}'
     `);
 
     console.log('Neon database connected and ready!');
@@ -142,7 +148,7 @@ app.post('/login', async (req, res) => {
         }
 
         const result = await pool.query(
-            'SELECT username, password_hash, coins FROM users WHERE username_key = $1',
+            'SELECT username, password_hash, coins, owned_weapons FROM users WHERE username_key = $1',
             [username.toLowerCase()]
         );
 
@@ -161,7 +167,7 @@ app.post('/login', async (req, res) => {
             `UPDATE users
              SET session_token = $1
              WHERE username_key = $2
-             RETURNING coins`,
+             RETURNING coins, owned_weapons`,
             [token, username.toLowerCase()]
         );
 
@@ -169,7 +175,8 @@ app.post('/login', async (req, res) => {
             success: true,
             username: user.username,
             token,
-            coins: updatedUser.rows[0].coins
+            coins: updatedUser.rows[0].coins,
+            ownedWeapons: updatedUser.rows[0].owned_weapons
         });
     } catch (error) {
         console.error('Login error:', error);
@@ -196,7 +203,7 @@ async function authenticate(req, res, next) {
         }
 
         const result = await pool.query(
-            'SELECT username_key, coins FROM users WHERE session_token = $1',
+            'SELECT username_key, coins, owned_weapons FROM users WHERE session_token = $1',
             [token]
         );
 
@@ -250,6 +257,79 @@ app.post('/coins/add', authenticate, async (req, res) => {
     } catch (error) {
         console.error('Coin saving error:', error);
         res.status(500).json({ success: false });
+    }
+});
+
+// LOAD OWNED WEAPONS
+app.get('/weapons', authenticate, (req, res) => {
+    res.json({
+        success: true,
+        coins: req.user.coins,
+        ownedWeapons: req.user.owned_weapons
+    });
+});
+
+// PURCHASE WEAPON
+app.post('/weapons/purchase', authenticate, async (req, res) => {
+    try {
+        const weapon = WEAPON_CATALOG.find(
+            item => item.id === req.body?.weaponId
+        );
+        if (!weapon) {
+            return res.status(400).json({
+                success: false,
+                message: 'Unknown weapon.'
+            });
+        }
+
+        const result = await pool.query(
+            `UPDATE users
+             SET coins = coins - $1,
+                 owned_weapons = array_append(owned_weapons, $2)
+             WHERE username_key = $3
+               AND coins >= $1
+               AND NOT ($2 = ANY(owned_weapons))
+             RETURNING coins, owned_weapons`,
+            [WEAPON_PRICE, weapon.id, req.user.username_key]
+        );
+
+        if (result.rows.length > 0) {
+            return res.json({
+                success: true,
+                coins: result.rows[0].coins,
+                ownedWeapons: result.rows[0].owned_weapons
+            });
+        }
+
+        const current = await pool.query(
+            'SELECT coins, owned_weapons FROM users WHERE username_key = $1',
+            [req.user.username_key]
+        );
+        const user = current.rows[0];
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Please log in again.'
+            });
+        }
+
+        if (user.owned_weapons.includes(weapon.id)) {
+            return res.status(409).json({
+                success: false,
+                message: 'You already own this weapon.'
+            });
+        }
+
+        return res.status(400).json({
+            success: false,
+            message: `You need ${WEAPON_PRICE} coins to buy this weapon.`
+        });
+    } catch (error) {
+        console.error('Weapon purchase error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Could not purchase weapon.'
+        });
     }
 });
 

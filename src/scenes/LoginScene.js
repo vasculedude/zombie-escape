@@ -5,8 +5,34 @@ export default class LoginScene extends Phaser.Scene {
         super('LoginScene');
     }
 
+    preload() {
+        this.load.audio(
+            'background-music',
+            `${import.meta.env.BASE_URL}audio/Depth.ogg`
+        );
+    }
+
     create() {
         this.cameras.main.setBackgroundColor('#101010');
+        const startBackgroundMusic = () => {
+            let music = this.registry.get('backgroundMusic');
+            if (!music) {
+                music = this.game.sound.add('background-music', {
+                    loop: true,
+                    volume: 0.35
+                });
+                this.registry.set('backgroundMusic', music);
+            }
+
+            if (!music.isPlaying) {
+                music.play();
+            }
+
+            this.input.off('pointerdown', startBackgroundMusic);
+            this.input.keyboard.off('keydown', startBackgroundMusic);
+        };
+        this.input.once('pointerdown', startBackgroundMusic);
+        this.input.keyboard.once('keydown', startBackgroundMusic);
 
         this.add.text(400, 65, 'ZOMBIE ESCAPE', {
             fontSize: '42px',
@@ -184,6 +210,7 @@ export default class LoginScene extends Phaser.Scene {
             this.registry.set('username', result.username);
             this.registry.set('authToken', result.token);
             this.registry.set('coins', result.coins);
+            this.registry.set('ownedWeapons', result.ownedWeapons || []);
             this.statusText.setText(`Welcome, ${result.username}!`);
 
             this.time.delayedCall(700, () => {

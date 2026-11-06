@@ -112,6 +112,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.maxReserveAmmo = MAX_TOTAL_AMMO;
         this.reloadUntil = 0;
         this.reloadDelay = 1000;
+        this.meleeSwingUntil = 0;
+        this.meleeSwingAngle = 0;
 
         this.swordDashCharges = 3;
         this.maxSwordDashCharges = 3;
@@ -231,7 +233,6 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         }
 
         this.health -= amount;
-        this.soundEffects?.playHumanDamage();
 
         if (this.health <= 0) {
 
@@ -312,7 +313,6 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             });
 
             this.scene.physics.pause();
-            this.soundEffects?.playDeath();
 
             return;
         }
@@ -349,7 +349,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             if (distance < 35) {
 
                 this.weapon = weapon;
-                this.magazineAmmo = this.magazineSize;
+                this.magazineSize = weapon.magazineSize;
+                this.magazineAmmo = weapon.isMelee ? 0 : weapon.magazineSize;
+                this.reserveAmmo = weapon.isMelee
+                    ? 0
+                    : Math.max(0, MAX_TOTAL_AMMO - this.magazineAmmo);
                 this.reloadUntil = 0;
 
                 if (weapon.type === 'sword') {
@@ -611,6 +615,40 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         }
     }
 
+    performMeleeAttack(now) {
+        if (now < this.lastShotTime + this.weapon.fireRate) {
+            return;
+        }
+
+        this.lastShotTime = now;
+        this.meleeSwingUntil = now + 180;
+        this.meleeSwingAngle = this.facingAngle;
+
+        for (const zombie of [...this.scene.zombies]) {
+            if (!zombie.active) continue;
+
+            const distance = Phaser.Math.Distance.Between(
+                this.x,
+                this.y,
+                zombie.x,
+                zombie.y
+            );
+            const angleToZombie = Phaser.Math.Angle.Between(
+                this.x,
+                this.y,
+                zombie.x,
+                zombie.y
+            );
+            const angleDifference = Math.abs(
+                Phaser.Math.Angle.Wrap(angleToZombie - this.facingAngle)
+            );
+
+            if (distance <= this.weapon.range && angleDifference <= Math.PI / 3) {
+                zombie.takeDamage(this.weapon.damage);
+            }
+        }
+    }
+
     // =========================
     // SHOOT
     // =========================
@@ -621,13 +659,16 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             return;
         }
 
+        const now = this.scene.time.now;
+        if (this.weapon.isMelee) {
+            this.performMeleeAttack(now);
+            return;
+        }
+
         if (this.weapon.type === 'sword') {
             this.performSwordDash();
             return;
         }
-
-        const now =
-            this.scene.time.now;
 
         if (now < this.reloadUntil) {
             return;
@@ -651,7 +692,6 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
         this.lastShotTime = now;
         this.magazineAmmo -= 1;
-        this.soundEffects?.playShot();
 
         if (this.magazineAmmo === 0 && this.reserveAmmo > 0) {
             this.reloadUntil = now + this.reloadDelay;
@@ -659,23 +699,23 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
         const angle = this.facingAngle;
 
-        const projectile =
-            new Projectile(
-                this.scene,
-                this.x,
-                this.y,
-                angle,
-                this.weapon.damage,
-                this.weapon.range
-            );
-
         if (!this.scene.projectiles) {
             this.scene.projectiles = [];
         }
 
-        this.scene.projectiles.push(
-            projectile
-        );
+        for (let pellet = 0; pellet < this.weapon.pellets; pellet++) {
+            const spread = this.weapon.pellets > 1
+                ? (pellet / (this.weapon.pellets - 1) - 0.5) * 0.32
+                : 0;
+            this.scene.projectiles.push(new Projectile(
+                this.scene,
+                this.x,
+                this.y,
+                angle + spread,
+                this.weapon.damage,
+                this.weapon.range
+            ));
+        }
     }
 
     // =========================
@@ -746,6 +786,14 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                 if (elapsed >= 420) {
                     this.swordSwing = null;
                 }
+            } else if (this.weapon?.isMelee && this.scene.time.now < this.meleeSwingUntil) {
+                    this.heldWeapon.setPosition(
+                        this.x + Math.cos(this.meleeSwingAngle) * 25,
+                        this.y + Math.sin(this.meleeSwingAngle) * 25
+                    );
+                    this.heldWeapon.setRotation(
+                        this.meleeSwingAngle + Math.PI / 2
+                    );
             } else {
                 this.heldWeapon.setPosition(
                     this.x + Math.cos(angle) * 13,
@@ -852,7 +900,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             this.weapon ? this.weapon.name : 'NO WEAPON';
         this.weaponText.setText(nameText);
         this.ammoText.setText(
-            String(this.magazineAmmo + this.reserveAmmo)
+            this.weapon?.isMelee
+                ? 'MELEE'
+                : this.weapon
+                    ? String(this.magazineAmmo + this.reserveAmmo)
+                    : '--'
         );
         this.grenadeText.setText(`G: ${this.grenades}`);
         this.weaponText.setPosition(hudX, hudY + 26);
