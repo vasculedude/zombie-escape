@@ -10,6 +10,7 @@ import MedKitPickup from '../entities/MedKitPickup.js';
 import CoinPickup from '../entities/CoinPickup.js';
 import GrenadePickup from '../entities/GrenadePickup.js';
 import createSoundEffects from '../utils/soundEffects.js';
+import { getSurvivalCoinReward } from '../utils/coinRewards.js';
 
 export default class GameScene extends Phaser.Scene {
 
@@ -70,14 +71,20 @@ export default class GameScene extends Phaser.Scene {
             3000
         );
 
-        this.score = 0;
+        this.runCoins = 0;
         this.coins = this.registry.get('coins') || 0;
+        this.survivalSeconds = 0;
+        this.runStartedAt = performance.now();
+        this.runEnded = false;
+        this.runReward = null;
+        this.runRewardSaved = 0;
+        this.runSavePromise = null;
 
         this.scoreText = this.add.text(
             this.cameras.main.width /
                 this.cameras.main.zoom - 20,
             20,
-            'Score: 0',
+            'Time survived: 0:00',
             {
                 fontSize: '20px',
                 color: '#ffffff',
@@ -90,8 +97,6 @@ export default class GameScene extends Phaser.Scene {
         this.scoreText
             .setOrigin(1, 0)
             .setDepth(200000);
-
-        this.loadCoins();
 
         // =========================
         // GROUND
@@ -482,43 +487,61 @@ this.time.addEvent({
         this.grenadePickups.push(pickup);
     }
 
-    async loadCoins() {
-        const token = this.registry.get('authToken');
+    addCoins(amount) {
+        if (this.runEnded) return;
 
-        if (!token) return;
-
-        const SERVER_URL = import.meta.env.DEV
-            ? 'http://localhost:3001'
-            : 'https://zombie-escape-2qlc.onrender.com';
-
-        try {
-            const response = await fetch(`${SERVER_URL}/coins`, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
-
-            const result = await response.json();
-
-            if (response.ok && result.success) {
-                this.coins = result.coins;
-                this.registry.set('coins', this.coins);
-            }
-        } catch (error) {
-            console.error('Could not load coins:', error);
+        if (!Number.isInteger(amount) || amount < 1) {
+            console.error('Could not add invalid run coin amount:', amount);
+            return;
         }
+
+        this.runCoins += amount;
     }
 
-    async addCoins(amount) {
-        const token = this.registry.get('authToken');
+    endRun() {
+        if (this.runEnded) return;
 
-        if (!token) return;
+        this.runEnded = true;
+        this.survivalSeconds = Math.floor(
+            (performance.now() - this.runStartedAt) / 1000
+        );
+        this.scoreText.setText(
+            `Time survived: ${this.formatSurvivalTime(this.survivalSeconds)}`
+        );
+        this.runReward = getSurvivalCoinReward(
+            this.runCoins,
+            this.survivalSeconds
+        );
+    }
+
+    formatSurvivalTime(totalSeconds) {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    async saveRunReward() {
+        if (!this.runEnded) this.endRun();
+        if (this.runReward === 0) return;
+        if (this.runSavePromise) return this.runSavePromise;
+
+        this.runSavePromise = this.persistRunReward().catch(error => {
+            this.runSavePromise = null;
+            throw error;
+        });
+        return this.runSavePromise;
+    }
+
+    async persistRunReward() {
+        const token = this.registry.get('authToken');
+        if (!token) throw new Error('You must be logged in to save run coins.');
 
         const SERVER_URL = import.meta.env.DEV
             ? 'http://localhost:3001'
             : 'https://zombie-escape-2qlc.onrender.com';
 
-        try {
+        while (this.runRewardSaved < this.runReward) {
+            const amount = Math.min(100, this.runReward - this.runRewardSaved);
             const response = await fetch(`${SERVER_URL}/coins/add`, {
                 method: 'POST',
                 headers: {
@@ -527,18 +550,15 @@ this.time.addEvent({
                 },
                 body: JSON.stringify({ amount })
             });
-
             const result = await response.json();
 
             if (!response.ok || !result.success) {
-                console.error('Could not save coins:', result.message);
-                return;
+                throw new Error(result.message || 'Could not save run coins.');
             }
 
             this.coins = result.coins;
             this.registry.set('coins', this.coins);
-        } catch (error) {
-            console.error('Coin saving error:', error);
+            this.runRewardSaved += amount;
         }
     }
 
@@ -599,6 +619,18 @@ this.time.addEvent({
     // =========================
 
  update() {
+
+    if (!this.runEnded) {
+        const elapsedSeconds = Math.floor(
+            (performance.now() - this.runStartedAt) / 1000
+        );
+        if (elapsedSeconds !== this.survivalSeconds) {
+            this.survivalSeconds = elapsedSeconds;
+            this.scoreText.setText(
+                `Time survived: ${this.formatSurvivalTime(elapsedSeconds)}`
+            );
+        }
+    }
 
     this.scoreText.setPosition(
         this.cameras.main.worldView.right - 20,

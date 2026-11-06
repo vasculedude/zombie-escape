@@ -236,6 +236,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         if (this.health <= 0) {
 
             this.health = 0;
+            this.scene.endRun();
 
             this.setVelocity(0, 0);
 
@@ -288,13 +289,26 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                 button.on('pointerdown', onClick);
             };
 
+            let leavingRun = false;
+            const saveThen = (callback) => {
+                if (leavingRun) return;
+                leavingRun = true;
+                this.scene.saveRunReward().then(callback).catch(error => {
+                    console.error('Could not save run rewards:', error);
+                    defeatText.setText('COINS COULD NOT BE SAVED - TRY AGAIN');
+                    leavingRun = false;
+                });
+            };
+
             addDefeatButton('HOME', 320, () => {
-                this.scene.scene.start('MenuScene');
+                saveThen(() => this.scene.scene.start('MenuScene'));
             });
 
             addDefeatButton('PLAY AGAIN', 460, () => {
-                this.scene.physics.resume();
-                this.scene.scene.restart();
+                saveThen(() => {
+                    this.scene.physics.resume();
+                    this.scene.scene.restart();
+                });
             });
 
             this.scene.physics.pause();
