@@ -4,6 +4,7 @@ import { socket } from './network/socket.js';
 import MenuScene from './scenes/MenuScene.js';
 import CharacterScene from './scenes/CharacterScene.js';
 import GameScene from './scenes/GameScene.js';
+import ShopScene from './scenes/ShopScene.js';
 socket.on('connect', () => {
     console.log('Connected to server:', socket.id);
 });
@@ -29,6 +30,7 @@ const config = {
     scene: [
         LoginScene,
         MenuScene,
+        ShopScene,
         CharacterScene,
         GameScene
     ]

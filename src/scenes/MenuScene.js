@@ -16,15 +16,15 @@ export default class MenuScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         this.coinsText = this.add.text(
-            400,
-            190,
+            780,
+            20,
             `Coins: ${this.registry.get('coins') ?? 0}`,
             {
                 fontSize: '22px',
                 color: '#ffd45c',
                 fontStyle: 'bold'
             }
-        ).setOrigin(0.5);
+        ).setOrigin(1, 0);
         this.loadCoins();
 
         // New Game button
@@ -58,8 +58,27 @@ export default class MenuScene extends Phaser.Scene {
             color: '#777777'
         }).setOrigin(0.5);
 
+        const shop = this.add.text(400, 375, 'SHOP', {
+            fontSize: '24px',
+            color: '#ffffff'
+        }).setOrigin(0.5);
+
+        shop.setInteractive({ useHandCursor: true });
+
+        shop.on('pointerover', () => {
+            shop.setStyle({ color: '#ffff00' });
+        });
+
+        shop.on('pointerout', () => {
+            shop.setStyle({ color: '#ffffff' });
+        });
+
+        shop.on('pointerdown', () => {
+            this.scene.start('ShopScene');
+        });
+
         // Settings button
-        const settings = this.add.text(400, 400, 'SETTINGS', {
+        const settings = this.add.text(400, 425, 'SETTINGS', {
             fontSize: '24px',
             color: '#ffffff'
         }).setOrigin(0.5);
@@ -75,7 +94,7 @@ export default class MenuScene extends Phaser.Scene {
         });
 
         // Credits button
-        const credits = this.add.text(400, 460, 'CREDITS', {
+        const credits = this.add.text(400, 475, 'CREDITS', {
             fontSize: '24px',
             color: '#00ff37'
         }).setOrigin(0.5);

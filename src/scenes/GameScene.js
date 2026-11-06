@@ -91,24 +91,6 @@ export default class GameScene extends Phaser.Scene {
             .setOrigin(1, 0)
             .setDepth(200000);
 
-        this.coinsText = this.add.text(
-            this.cameras.main.width /
-                this.cameras.main.zoom - 20,
-            48,
-            `Coins: ${this.coins}`,
-            {
-                fontSize: '18px',
-                color: '#ffd45c',
-                fontStyle: 'bold',
-                stroke: '#000000',
-                strokeThickness: 4
-            }
-        );
-
-        this.coinsText
-            .setOrigin(1, 0)
-            .setDepth(200000);
-
         this.loadCoins();
 
         // =========================
@@ -521,7 +503,6 @@ this.time.addEvent({
             if (response.ok && result.success) {
                 this.coins = result.coins;
                 this.registry.set('coins', this.coins);
-                this.coinsText.setText(`Coins: ${this.coins}`);
             }
         } catch (error) {
             console.error('Could not load coins:', error);
@@ -556,7 +537,6 @@ this.time.addEvent({
 
             this.coins = result.coins;
             this.registry.set('coins', this.coins);
-            this.coinsText.setText(`Coins: ${this.coins}`);
         } catch (error) {
             console.error('Coin saving error:', error);
         }
@@ -624,11 +604,6 @@ this.time.addEvent({
         this.cameras.main.worldView.right - 20,
         this.cameras.main.worldView.top + 20
     );
-    this.coinsText.setPosition(
-        this.cameras.main.worldView.right - 20,
-        this.cameras.main.worldView.top + 48
-    );
-
     this.player.update();
 
     for (const zombie of [...this.zombies]) {
