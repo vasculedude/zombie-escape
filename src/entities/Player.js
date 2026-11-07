@@ -992,12 +992,21 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         // SHOOT
         // =========================
 
-        if (
+        const isFirearm =
+            this.weapon &&
+            !this.weapon.isMelee &&
+            this.weapon.type !== 'sword';
+        const shootHeld =
+            this.shootKey.isDown ||
+            (pointer.isDown && pointer.leftButtonDown());
+
+        if (isFirearm && shootHeld) {
+            this.shoot();
+        } else if (
             Phaser.Input.Keyboard.JustDown(
                 this.shootKey
             )
         ) {
-
             this.shoot();
         }
     }
