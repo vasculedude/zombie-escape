@@ -78,12 +78,17 @@ export default class MenuScene extends Phaser.Scene {
         });
 
         const armory = this.add.text(400, 415, 'ARMORY', {
-            fontSize: '24px',
-            color: '#ffffff'
+            fontSize: '25px',
+            color: '#ffffff',
+            fontStyle: 'bold',
+            backgroundColor: '#245c24',
+            padding: { x: 28, y: 9 }
         }).setOrigin(0.5);
 
         armory.setInteractive({ useHandCursor: true });
-        armory.on('pointerover', () => armory.setStyle({ color: '#ffff00' }));
+        armory.on('pointerover', () => {
+            armory.setStyle({ backgroundColor: '#347c34', color: '#ffffff' });
+        });
         armory.on('pointerout', () => armory.setStyle({ color: '#ffffff' }));
         armory.on('pointerdown', () => this.scene.start('ArmoryScene'));
 
