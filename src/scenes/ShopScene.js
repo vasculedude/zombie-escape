@@ -128,6 +128,9 @@ export default class ShopScene extends Phaser.Scene {
 
             this.ownedWeapons = result.ownedWeapons;
             this.registry.set('ownedWeapons', this.ownedWeapons);
+            if (Array.isArray(result.spawnWeapons)) {
+                this.registry.set('spawnWeapons', result.spawnWeapons);
+            }
             this.registry.set('coins', result.coins);
             this.coinsText.setText(`Coins: ${result.coins}`);
             for (const weapon of WEAPON_CATALOG) {

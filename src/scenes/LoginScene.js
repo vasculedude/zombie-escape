@@ -211,6 +211,12 @@ export default class LoginScene extends Phaser.Scene {
             this.registry.set('authToken', result.token);
             this.registry.set('coins', result.coins);
             this.registry.set('ownedWeapons', result.ownedWeapons || []);
+            this.registry.set('spawnWeapons', result.spawnWeapons || [
+                'blaster',
+                'rapid',
+                'heavy',
+                'sword'
+            ]);
             this.statusText.setText(`Welcome, ${result.username}!`);
 
             this.time.delayedCall(700, () => {

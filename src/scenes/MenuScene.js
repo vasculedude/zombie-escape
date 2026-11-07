@@ -77,8 +77,18 @@ export default class MenuScene extends Phaser.Scene {
             this.scene.start('ShopScene');
         });
 
+        const armory = this.add.text(400, 415, 'ARMORY', {
+            fontSize: '24px',
+            color: '#ffffff'
+        }).setOrigin(0.5);
+
+        armory.setInteractive({ useHandCursor: true });
+        armory.on('pointerover', () => armory.setStyle({ color: '#ffff00' }));
+        armory.on('pointerout', () => armory.setStyle({ color: '#ffffff' }));
+        armory.on('pointerdown', () => this.scene.start('ArmoryScene'));
+
         // Settings button
-        const settings = this.add.text(400, 425, 'SETTINGS', {
+        const settings = this.add.text(400, 460, 'SETTINGS', {
             fontSize: '24px',
             color: '#ffffff'
         }).setOrigin(0.5);
@@ -94,7 +104,7 @@ export default class MenuScene extends Phaser.Scene {
         });
 
         // Credits button
-        const credits = this.add.text(400, 475, 'CREDITS', {
+        const credits = this.add.text(400, 505, 'CREDITS', {
             fontSize: '24px',
             color: '#00ff37'
         }).setOrigin(0.5);

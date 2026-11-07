@@ -40,3 +40,13 @@ test('only unique purchased catalog weapons can spawn', () => {
     ['blaster', 'rapid', 'heavy', 'sword']
   );
 });
+
+test('selected spawn weapons are limited to unique unlocked weapons', () => {
+  assert.deepEqual(
+    getSpawnableWeaponIds(
+      ['pistol'],
+      ['pistol', 'unknown', 'pistol', 'sword']
+    ),
+    ['pistol', 'sword']
+  );
+});

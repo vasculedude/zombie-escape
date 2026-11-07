@@ -128,16 +128,24 @@ export function getWeaponById(id) {
         STARTER_WEAPON_CATALOG.find(weapon => weapon.id === id);
 }
 
-export function getSpawnableWeaponIds(ownedWeaponIds) {
+export function getSpawnableWeaponIds(ownedWeaponIds, selectedWeaponIds) {
     const purchasedWeaponIds = Array.isArray(ownedWeaponIds)
         ? ownedWeaponIds
         : [];
 
-    return [...new Set([
+    const availableWeaponIds = [...new Set([
         ...STARTER_WEAPON_CATALOG.map(weapon => weapon.id),
         ...purchasedWeaponIds.filter(
             id => typeof id === 'string' &&
                 WEAPON_CATALOG.some(weapon => weapon.id === id)
         )
     ])];
+
+    if (!Array.isArray(selectedWeaponIds)) {
+        return availableWeaponIds;
+    }
+
+    return [...new Set(selectedWeaponIds.filter(
+        id => typeof id === 'string' && availableWeaponIds.includes(id)
+    ))];
 }
