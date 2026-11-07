@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { WEAPON_CATALOG, WEAPON_PRICE } from '../utils/weaponCatalog.js';
+import { getWeaponPrice, WEAPON_CATALOG } from '../utils/weaponCatalog.js';
 
 export default class ShopScene extends Phaser.Scene {
     constructor() {
@@ -98,7 +98,7 @@ export default class ShopScene extends Phaser.Scene {
         button.setText(
             owned ? 'OWNED' : this.pendingPurchases.has(weaponId)
                 ? 'BUYING...'
-                : `${WEAPON_PRICE} COINS`
+                : `${getWeaponPrice(weaponId)} COINS`
         );
         button.setStyle({
             backgroundColor: owned ? '#333333' : '#245c24',

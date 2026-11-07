@@ -1,4 +1,8 @@
-export const WEAPON_PRICE = 2000;
+export const WEAPON_PRICES = Object.freeze({
+    Common: 500,
+    Uncommon: 1000,
+    Rare: 2500
+});
 
 export const STARTER_WEAPON_CATALOG = [
     {
@@ -122,6 +126,20 @@ export const WEAPON_CATALOG = [
         magazineSize: 5
     }
 ];
+
+export function getWeaponPrice(weaponId) {
+    const weapon = WEAPON_CATALOG.find(item => item.id === weaponId);
+    if (!weapon) {
+        throw new RangeError(`Unknown purchasable weapon: ${weaponId}`);
+    }
+
+    const price = WEAPON_PRICES[weapon.rarity];
+    if (!price) {
+        throw new RangeError(`Unknown weapon rarity: ${weapon.rarity}`);
+    }
+
+    return price;
+}
 
 export function getWeaponById(id) {
     return WEAPON_CATALOG.find(weapon => weapon.id === id) ||

@@ -3,13 +3,18 @@ import assert from 'node:assert/strict';
 
 import {
   getSpawnableWeaponIds,
+  getWeaponPrice,
   getWeaponById,
   WEAPON_CATALOG,
-  WEAPON_PRICE
+  WEAPON_PRICES
 } from '../src/utils/weaponCatalog.js';
 
-test('all listed weapons cost 2000 and have unique ids', () => {
-  assert.equal(WEAPON_PRICE, 2000);
+test('weapons are priced by rarity and have unique ids', () => {
+  assert.deepEqual(WEAPON_PRICES, {
+    Common: 500,
+    Uncommon: 1000,
+    Rare: 2500
+  });
   assert.equal(WEAPON_CATALOG.length, 8);
   assert.equal(new Set(WEAPON_CATALOG.map(weapon => weapon.id)).size, 8);
   assert.ok(WEAPON_CATALOG.every(weapon =>
@@ -18,6 +23,12 @@ test('all listed weapons cost 2000 and have unique ids', () => {
     Number.isFinite(weapon.fireRate) &&
     weapon.fireRate > 0
   ));
+  for (const weapon of WEAPON_CATALOG) {
+    assert.equal(getWeaponPrice(weapon.id), WEAPON_PRICES[weapon.rarity]);
+  }
+  assert.equal(getWeaponPrice('pistol'), 500);
+  assert.equal(getWeaponPrice('machete'), 1000);
+  assert.equal(getWeaponPrice('sniper_rifle'), 2500);
 });
 
 test('catalog includes the requested magazine sizes and damage values', () => {

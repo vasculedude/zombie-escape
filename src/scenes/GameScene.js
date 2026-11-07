@@ -39,6 +39,17 @@ export default class GameScene extends Phaser.Scene {
         // PLAYER
         // =========================
 
+        const availableWeaponIds = getSpawnableWeaponIds(
+            this.registry.get('ownedWeapons')
+        );
+        const selectedWeaponIds = getSpawnableWeaponIds(
+            this.registry.get('ownedWeapons'),
+            this.registry.get('spawnWeapons')
+        );
+        this.armoryWeaponIds = selectedWeaponIds.length === 4
+            ? selectedWeaponIds
+            : availableWeaponIds.slice(0, 4);
+
         this.player = new Player(
             this,
             400,
@@ -294,10 +305,7 @@ export default class GameScene extends Phaser.Scene {
 
 this.weapons = [];
 
-const weaponTypes = getSpawnableWeaponIds(
-    this.registry.get('ownedWeapons'),
-    this.registry.get('spawnWeapons')
-);
+const weaponTypes = this.armoryWeaponIds;
 
 for (let i = 0; i < 22 && weaponTypes.length > 0; i++) {
 

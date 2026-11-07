@@ -8,7 +8,7 @@ import pg from 'pg';
 import {
     getSpawnableWeaponIds,
     WEAPON_CATALOG,
-    WEAPON_PRICE
+    getWeaponPrice
 } from './weaponCatalog.js';
 
 const app = express();
@@ -339,6 +339,8 @@ app.post('/weapons/purchase', authenticate, async (req, res) => {
             });
         }
 
+        const price = getWeaponPrice(weapon.id);
+
         const result = await pool.query(
             `UPDATE users
              SET coins = coins - $1,
@@ -347,7 +349,7 @@ app.post('/weapons/purchase', authenticate, async (req, res) => {
                AND coins >= $1
                AND NOT ($2 = ANY(owned_weapons))
              RETURNING coins, owned_weapons`,
-            [WEAPON_PRICE, weapon.id, req.user.username_key]
+            [price, weapon.id, req.user.username_key]
         );
 
         if (result.rows.length > 0) {
@@ -379,7 +381,7 @@ app.post('/weapons/purchase', authenticate, async (req, res) => {
 
         return res.status(400).json({
             success: false,
-            message: `You need ${WEAPON_PRICE} coins to buy this weapon.`
+            message: `You need ${price} coins to buy this weapon.`
         });
     } catch (error) {
         console.error('Weapon purchase error:', error);

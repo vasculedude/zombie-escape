@@ -1,6 +1,7 @@
 export {
     WEAPON_CATALOG,
-    WEAPON_PRICE,
+    WEAPON_PRICES,
+    getWeaponPrice,
     getWeaponById,
     getSpawnableWeaponIds,
     STARTER_WEAPON_CATALOG

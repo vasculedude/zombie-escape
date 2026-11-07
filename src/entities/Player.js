@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import Projectile from './Projectile.js';
 import { MAX_TOTAL_AMMO, applyAmmoPickup } from '../utils/ammoUtils.js';
+import { getWeaponById } from '../utils/weaponCatalog.js';
 
 export default class Player extends Phaser.Physics.Arcade.Sprite {
 
@@ -98,13 +99,16 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         // SHOOTING
         // =========================
 
-        this.shootKey =
-            scene.input.keyboard.addKey(
-                Phaser.Input.Keyboard.KeyCodes.E
-            );
+        this.weaponSlotKeys = [
+            Phaser.Input.Keyboard.KeyCodes.ONE,
+            Phaser.Input.Keyboard.KeyCodes.TWO,
+            Phaser.Input.Keyboard.KeyCodes.THREE,
+            Phaser.Input.Keyboard.KeyCodes.FOUR
+        ].map(keyCode => scene.input.keyboard.addKey(keyCode));
 
         this.weapon = null;
         this.heldWeapon = null;
+        this.selectedWeaponSlot = 0;
         this.lastShotTime = 0;
         this.magazineSize = 10;
         this.magazineAmmo = 0;
@@ -119,6 +123,15 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.maxSwordDashCharges = 3;
         this.swordRechargeUntil = 0;
         this.swordSwing = null;
+        this.weaponSlots = scene.armoryWeaponIds.map(type => ({
+            type,
+            weapon: null,
+            magazineAmmo: 0,
+            reserveAmmo: 0,
+            reloadUntil: 0,
+            swordDashCharges: this.maxSwordDashCharges,
+            swordRechargeUntil: 0
+        }));
 
         this.grenades = 0;
         this.maxGrenades = 3;
@@ -205,6 +218,33 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.weaponText.setScrollFactor(1);
         this.ammoText.setScrollFactor(1);
         this.grenadeText.setScrollFactor(1);
+
+        this.weaponSlotBackgrounds = [];
+        this.weaponSlotTexts = [];
+        for (let index = 0; index < 4; index++) {
+            const x = scene.scale.width / 2 - 216 + index * 144;
+            const background = scene.add.rectangle(
+                x,
+                scene.scale.height - 34,
+                136,
+                54,
+                0x202020,
+                0.95
+            );
+            background.setStrokeStyle(2, 0x777777);
+            background.setScrollFactor(0);
+            background.setDepth(200000);
+            this.weaponSlotBackgrounds.push(background);
+
+            const text = scene.add.text(x, scene.scale.height - 34, '', {
+                fontSize: '13px',
+                color: '#ffffff',
+                align: 'center',
+                fontStyle: 'bold',
+                lineSpacing: 2
+            }).setOrigin(0.5).setScrollFactor(0).setDepth(200001);
+            this.weaponSlotTexts.push(text);
+        }
 
         // =========================
         // MOVEMENT
@@ -347,46 +387,139 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                 );
 
             if (distance < 35) {
-
-                this.weapon = weapon;
-                this.magazineSize = weapon.magazineSize;
-                this.magazineAmmo = weapon.isMelee ? 0 : weapon.magazineSize;
-                this.reserveAmmo = weapon.isMelee
-                    ? 0
-                    : Math.max(0, MAX_TOTAL_AMMO - this.magazineAmmo);
-                this.reloadUntil = 0;
-
-                if (weapon.type === 'sword') {
-                    this.swordDashCharges = this.maxSwordDashCharges;
-                    this.swordRechargeUntil = 0;
-                }
-
-                if (this.heldWeapon) {
-                    this.heldWeapon.destroy();
-                }
-
-                this.heldWeapon = this.scene.add.image(
-                    this.x,
-                    this.y,
-                    `weapon-${weapon.type}`
+                const slotIndex = this.scene.armoryWeaponIds.indexOf(
+                    weapon.type
                 );
-                this.heldWeapon.setDisplaySize(30, 20);
-                this.heldWeapon.setDepth(this.depth + 1);
+                if (slotIndex < 0) continue;
+
+                this.storeCurrentWeaponSlot();
+                const slot = this.weaponSlots[slotIndex];
+                slot.weapon = {
+                    type: weapon.type,
+                    name: weapon.name,
+                    damage: weapon.damage,
+                    range: weapon.range,
+                    fireRate: weapon.fireRate,
+                    magazineSize: weapon.magazineSize,
+                    pellets: weapon.pellets,
+                    isMelee: weapon.isMelee
+                };
+                slot.magazineAmmo = weapon.isMelee ? 0 : weapon.magazineSize;
+                slot.reserveAmmo = weapon.isMelee
+                    ? 0
+                    : Math.max(0, MAX_TOTAL_AMMO - slot.magazineAmmo);
+                slot.reloadUntil = 0;
+                slot.swordDashCharges = this.maxSwordDashCharges;
+                slot.swordRechargeUntil = 0;
+
+                if (slotIndex === this.selectedWeaponSlot) {
+                    this.applyWeaponSlot(slotIndex);
+                }
 
                 weapon.destroy();
-
-                this.scene.weapons =
-                    this.scene.weapons.filter(
-                        item => item !== weapon
-                    );
-
-                console.log(
-                    'Picked up:',
-                    this.weapon.name
+                this.scene.weapons = this.scene.weapons.filter(
+                    item => item !== weapon
                 );
 
+                console.log('Picked up:', weapon.name);
+                this.updateWeaponBar();
                 break;
             }
+        }
+    }
+
+    storeCurrentWeaponSlot() {
+        const slot = this.weaponSlots[this.selectedWeaponSlot];
+        if (!slot || !this.weapon) return;
+
+        slot.weapon = this.weapon;
+        slot.magazineAmmo = this.magazineAmmo;
+        slot.reserveAmmo = this.reserveAmmo;
+        slot.reloadUntil = this.reloadUntil;
+        slot.swordDashCharges = this.swordDashCharges;
+        slot.swordRechargeUntil = this.swordRechargeUntil;
+    }
+
+    applyWeaponSlot(index) {
+        this.selectedWeaponSlot = index;
+        const slot = this.weaponSlots[index];
+        this.weapon = slot.weapon;
+        this.magazineSize = this.weapon?.magazineSize || 0;
+        this.magazineAmmo = slot.magazineAmmo;
+        this.reserveAmmo = slot.reserveAmmo;
+        this.reloadUntil = slot.reloadUntil;
+        this.swordDashCharges = slot.swordDashCharges;
+        this.swordRechargeUntil = slot.swordRechargeUntil;
+        this.swordSwing = null;
+        this.meleeSwingUntil = 0;
+
+        if (this.heldWeapon) {
+            this.heldWeapon.destroy();
+            this.heldWeapon = null;
+        }
+
+        if (this.weapon) {
+            this.heldWeapon = this.scene.add.image(
+                this.x,
+                this.y,
+                `weapon-${this.weapon.type}`
+            );
+            this.heldWeapon.setDisplaySize(
+                this.weapon.type === 'sword' ? 28 : 30,
+                this.weapon.type === 'sword' ? 28 : 20
+            );
+            this.heldWeapon.setDepth(this.depth + 1);
+        }
+
+        this.updateWeaponBar();
+    }
+
+    selectWeaponSlot(index) {
+        if (
+            index < 0 ||
+            index >= this.weaponSlots.length ||
+            index === this.selectedWeaponSlot
+        ) {
+            return;
+        }
+
+        this.storeCurrentWeaponSlot();
+        this.applyWeaponSlot(index);
+    }
+
+    updateWeaponBar() {
+        const activeSlot = this.weaponSlots[this.selectedWeaponSlot];
+        if (activeSlot && this.weapon) {
+            activeSlot.weapon = this.weapon;
+            activeSlot.magazineAmmo = this.magazineAmmo;
+            activeSlot.reserveAmmo = this.reserveAmmo;
+            activeSlot.reloadUntil = this.reloadUntil;
+            activeSlot.swordDashCharges = this.swordDashCharges;
+            activeSlot.swordRechargeUntil = this.swordRechargeUntil;
+        }
+
+        for (let index = 0; index < this.weaponSlots.length; index++) {
+            const slot = this.weaponSlots[index];
+            const isSelected = index === this.selectedWeaponSlot;
+            const weaponInfo = getWeaponById(slot.type);
+            const name = slot.weapon?.name || weaponInfo?.name || slot.type;
+            const ammo = !slot.weapon
+                ? 'PICK UP'
+                : slot.weapon.isMelee
+                    ? 'MELEE'
+                    : `${slot.magazineAmmo}/${slot.reserveAmmo}`;
+
+            this.weaponSlotBackgrounds[index].setFillStyle(
+                isSelected ? 0x245c24 : 0x202020,
+                0.95
+            );
+            this.weaponSlotBackgrounds[index].setStrokeStyle(
+                2,
+                isSelected ? 0x55ff55 : 0x777777
+            );
+            this.weaponSlotTexts[index].setText(
+                `${index + 1}: ${name}\n${ammo}`
+            );
         }
     }
 
@@ -928,6 +1061,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             );
         }
 
+        this.updateWeaponBar();
+
         // =========================
         // UPDATE HP
         // =========================
@@ -992,20 +1127,19 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         // SHOOT
         // =========================
 
+        for (let index = 0; index < this.weaponSlotKeys.length; index++) {
+            if (Phaser.Input.Keyboard.JustDown(this.weaponSlotKeys[index])) {
+                this.selectWeaponSlot(index);
+            }
+        }
+
         const isFirearm =
             this.weapon &&
             !this.weapon.isMelee &&
             this.weapon.type !== 'sword';
-        const shootHeld =
-            this.shootKey.isDown ||
-            (pointer.isDown && pointer.leftButtonDown());
-
-        if (isFirearm && shootHeld) {
-            this.shoot();
-        } else if (
-            Phaser.Input.Keyboard.JustDown(
-                this.shootKey
-            )
+        if (
+            pointer.leftButtonDown() &&
+            (pointer.justDown || isFirearm)
         ) {
             this.shoot();
         }
