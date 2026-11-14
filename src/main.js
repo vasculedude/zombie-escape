@@ -13,6 +13,8 @@ socket.on('connect', () => {
 const config = {
     type: Phaser.AUTO,
 
+    parent: document.body,
+
     width: 800,
     height: 600,
 
