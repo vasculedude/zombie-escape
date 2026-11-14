@@ -217,6 +217,8 @@ export default class LoginScene extends Phaser.Scene {
                 'heavy',
                 'sword'
             ]);
+            this.registry.set('ownedCharacters', result.ownedCharacters || []);
+            this.registry.set('selectedCharacter', result.selectedCharacter || 'survivor');
             this.statusText.setText(`Welcome, ${result.username}!`);
 
             this.time.delayedCall(700, () => {

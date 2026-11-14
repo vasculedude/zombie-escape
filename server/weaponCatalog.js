@@ -147,13 +147,15 @@ export function getWeaponById(id) {
 }
 
 export function getSpawnableWeaponIds(ownedWeaponIds, selectedWeaponIds) {
-    const purchasedWeaponIds = Array.isArray(ownedWeaponIds)
+    const rawOwnedWeaponIds = Array.isArray(ownedWeaponIds)
         ? ownedWeaponIds
-        : [];
+        : typeof ownedWeaponIds === 'string'
+            ? [ownedWeaponIds]
+            : [];
 
     const availableWeaponIds = [...new Set([
         ...STARTER_WEAPON_CATALOG.map(weapon => weapon.id),
-        ...purchasedWeaponIds.filter(
+        ...rawOwnedWeaponIds.filter(
             id => typeof id === 'string' &&
                 WEAPON_CATALOG.some(weapon => weapon.id === id)
         )

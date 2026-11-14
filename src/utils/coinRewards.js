@@ -1,18 +1,23 @@
 export function getSurvivalCoinReward(runCoins, survivalSeconds) {
-    if (!Number.isInteger(runCoins) || runCoins < 0 ||
-        !Number.isFinite(survivalSeconds) || survivalSeconds < 0) {
-        throw new RangeError('Run coins and survival time must be non-negative.');
+    if (!Number.isInteger(runCoins) || runCoins < 0) {
+        throw new RangeError('Run coins must be a non-negative integer.');
     }
 
-    if (survivalSeconds < 60) {
+    if (!Number.isFinite(survivalSeconds) || survivalSeconds < 0) {
+        throw new RangeError('Survival time must be a non-negative finite number.');
+    }
+
+    const secondsSurvived = Math.floor(survivalSeconds);
+
+    if (secondsSurvived < 60) {
         return Math.floor(runCoins / 4);
     }
 
-    if (survivalSeconds >= 180 && survivalSeconds <= 300) {
+    if (secondsSurvived >= 180 && secondsSurvived <= 300) {
         return Math.floor(runCoins / 2);
     }
 
-    if (survivalSeconds >= 540) {
+    if (secondsSurvived >= 540) {
         return runCoins + 1000;
     }
 

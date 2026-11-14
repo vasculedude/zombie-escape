@@ -12,6 +12,14 @@ import GrenadePickup from '../entities/GrenadePickup.js';
 import createSoundEffects from '../utils/soundEffects.js';
 import { getSurvivalCoinReward } from '../utils/coinRewards.js';
 import { getSpawnableWeaponIds } from '../utils/weaponCatalog.js';
+import {
+    getAmmoPickupCount,
+    getAmmoSpawnInterval,
+    getCharacterById,
+    getHealthSpawnInterval,
+    getItemSpawnInterval,
+    getWeaponDropCount
+} from '../utils/characterCatalog.js';
 
 export default class GameScene extends Phaser.Scene {
 
@@ -39,6 +47,9 @@ export default class GameScene extends Phaser.Scene {
         // PLAYER
         // =========================
 
+        this.character = getCharacterById(
+            this.registry.get('selectedCharacter')
+        );
         const availableWeaponIds = getSpawnableWeaponIds(
             this.registry.get('ownedWeapons')
         );
@@ -306,8 +317,9 @@ export default class GameScene extends Phaser.Scene {
 this.weapons = [];
 
 const weaponTypes = this.armoryWeaponIds;
+const weaponDropCount = getWeaponDropCount(22, this.character);
 
-for (let i = 0; i < 22 && weaponTypes.length > 0; i++) {
+for (let i = 0; i < weaponDropCount && weaponTypes.length > 0; i++) {
 
     const x = Phaser.Math.Between(
         100,
@@ -335,14 +347,14 @@ for (let i = 0; i < 22 && weaponTypes.length > 0; i++) {
 }
 
 this.ammoPickups = [];
-this.maxAmmoPickups = 20;
+this.maxAmmoPickups = getAmmoPickupCount(20, this.character);
 
 for (let i = 0; i < this.maxAmmoPickups; i++) {
     this.spawnAmmoNearPlayer();
 }
 
 this.time.addEvent({
-    delay: 15000,
+    delay: getAmmoSpawnInterval(15000, this.character),
     callback: () => {
         if (this.ammoPickups.length < this.maxAmmoPickups) {
             this.spawnAmmoNearPlayer();
@@ -354,7 +366,7 @@ this.time.addEvent({
 this.medKitPickups = [];
 
 this.time.addEvent({
-    delay: 60000,
+    delay: getHealthSpawnInterval(60000, this.character),
     callback: () => {
         this.spawnMedKitNearPlayer();
         this.spawnMedKitNearPlayer();
@@ -365,7 +377,7 @@ this.time.addEvent({
 this.grenadePickups = [];
 
 this.time.addEvent({
-    delay: 45000,
+    delay: getItemSpawnInterval(45000, this.character),
     callback: () => {
         this.spawnGrenadeNearPlayer();
     },
@@ -375,7 +387,7 @@ this.time.addEvent({
 this.coinPickups = [];
 
 this.time.addEvent({
-    delay: 60000,
+    delay: getItemSpawnInterval(60000, this.character),
     callback: () => {
         this.spawnCoinNearPlayer();
         this.spawnCoinNearPlayer();
@@ -407,19 +419,16 @@ this.time.addEvent({
          this.projectiles = [];
         this.zombies = [];
         this.zombieSpawnRadius = 500;
+        this.nextRegularZombieSpawnAt = 10;
+        this.nextArmouredSpawnAt = 60;
+        this.nextTankSpawnAt = 181;
+        this.nextBossSpawnAt = 302;
 
         for (let i = 0; i < 5; i++) {
 
             this.spawnZombieNearPlayer();
         }
 
-        this.time.addEvent({
-            delay: 10000,
-            callback: () => {
-                this.spawnZombieNearPlayer();
-            },
-            loop: true
-        });
     }
 
     spawnAmmoNearPlayer() {
@@ -569,7 +578,7 @@ this.time.addEvent({
         }
     }
 
-    spawnZombieNearPlayer() {
+    spawnZombieNearPlayer(type) {
 
         const angle = Phaser.Math.FloatBetween(
             0,
@@ -592,15 +601,16 @@ this.time.addEvent({
             2975
         );
 
-        this.spawnZombie(x, y);
+        this.spawnZombie(x, y, type);
     }
 
-    spawnZombie(x, y) {
+    spawnZombie(x, y, type) {
 
         const zombie = new Zombie(
             this,
             x,
-            y
+            y,
+            type || Phaser.Utils.Array.GetRandom(['normal', 'runner'])
         );
 
         this.zombies.push(zombie);
@@ -627,6 +637,8 @@ this.time.addEvent({
 
  update() {
 
+    let spawnedTimedZombie = false;
+
     if (!this.runEnded) {
         const elapsedSeconds = Math.floor(
             (performance.now() - this.runStartedAt) / 1000
@@ -636,6 +648,31 @@ this.time.addEvent({
             this.scoreText.setText(
                 `Time survived: ${this.formatSurvivalTime(elapsedSeconds)}`
             );
+        }
+
+        if (elapsedSeconds >= this.nextArmouredSpawnAt) {
+            this.spawnZombieNearPlayer('armoured');
+            this.nextArmouredSpawnAt += 60;
+            spawnedTimedZombie = true;
+        }
+
+        if (elapsedSeconds >= this.nextTankSpawnAt) {
+            this.spawnZombieNearPlayer('tank');
+            this.nextTankSpawnAt += 180;
+            spawnedTimedZombie = true;
+        }
+
+        if (elapsedSeconds >= this.nextBossSpawnAt) {
+            this.spawnZombieNearPlayer('boss');
+            this.nextBossSpawnAt += 300;
+            spawnedTimedZombie = true;
+        }
+
+        if (elapsedSeconds >= this.nextRegularZombieSpawnAt) {
+            if (!spawnedTimedZombie) {
+                this.spawnZombieNearPlayer();
+            }
+            this.nextRegularZombieSpawnAt = elapsedSeconds + 10;
         }
     }
 
@@ -680,6 +717,9 @@ this.time.addEvent({
             );
 
             if (hitHouse || hitTree) {
+                if (projectile.splashRadius > 0) {
+                    this.damageZombiesAround(projectile);
+                }
                 projectile.destroy();
                 continue;
             }
@@ -700,10 +740,11 @@ this.time.addEvent({
                     );
 
                 if (distance < projectile.hitRadius) {
-
-                    zombie.takeDamage(
-                        projectile.damage
-                    );
+                    if (projectile.splashRadius > 0) {
+                        this.damageZombiesAround(projectile);
+                    } else {
+                        zombie.takeDamage(projectile.damage);
+                    }
 
                     projectile.destroy();
 
@@ -718,5 +759,25 @@ this.time.addEvent({
         this.projectiles.filter(
             projectile => projectile.active
         );
+}
+
+damageZombiesAround(projectile) {
+    for (const zombie of [...this.zombies]) {
+    if (!zombie.active) {
+        continue;
+    }
+
+    const distance = Phaser.Math.Distance.Between(
+        projectile.x,
+        projectile.y,
+        zombie.x,
+        zombie.y
+    );
+
+    if (distance <= projectile.splashRadius) {
+        const damageScale = 1 - 0.5 * (distance / projectile.splashRadius);
+        zombie.takeDamage(projectile.damage * damageScale);
+    }
+    }
 }
 }

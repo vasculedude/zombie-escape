@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
 import Projectile from './Projectile.js';
-import { MAX_TOTAL_AMMO, applyAmmoPickup } from '../utils/ammoUtils.js';
-import { getWeaponById } from '../utils/weaponCatalog.js';
+import { MAX_TOTAL_AMMO, distributeAmmoPickup } from '../utils/ammoUtils.js';
+import { getCharacterById } from '../utils/characterCatalog.js';
 
 export default class Player extends Phaser.Physics.Arcade.Sprite {
 
-    static createSpriteTexture(scene) {
-        const textureKey = 'player-human';
+    static createSpriteTexture(scene, characterId) {
+        const character = getCharacterById(characterId);
+        const textureKey = `player-${character.id}`;
 
         if (!scene.textures.exists(textureKey)) {
             const graphics = scene.make.graphics({
@@ -27,16 +28,37 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             graphics.fillRect(27, 29, 4, 12);
 
             // Body
-            graphics.fillStyle(0x4dabf7, 1);
+            graphics.fillStyle(character.color, 1);
             graphics.fillRoundedRect(13, 15, 22, 14, 4);
+            if (character.id === 'armoured') {
+                graphics.fillStyle(0x5c6670, 1);
+                graphics.fillRoundedRect(11, 16, 26, 10, 4);
+                graphics.fillStyle(0xc5cbd0, 1);
+                graphics.fillRect(17, 18, 14, 3);
+            } else if (character.id === 'speedster') {
+                graphics.fillStyle(0xffd45c, 1);
+                graphics.fillRect(18, 16, 4, 12);
+            } else if (character.id === 'gunner') {
+                graphics.fillStyle(0x333b27, 1);
+                graphics.fillRect(15, 23, 18, 5);
+            } else if (character.id === 'lucy') {
+                graphics.fillStyle(0xf0b6d7, 1);
+                graphics.fillRect(18, 16, 12, 3);
+            }
 
             // Head
             graphics.fillStyle(0xf2d0b5, 1);
             graphics.fillEllipse(24, 10, 12, 12);
 
             // Hair
-            graphics.fillStyle(0x2b1d12, 1);
+            graphics.fillStyle(character.id === 'lucy' ? 0x7d3b82 : 0x2b1d12, 1);
             graphics.fillRoundedRect(16, 5, 16, 6, 3);
+            if (character.id === 'armoured') {
+                graphics.fillStyle(0x5c6670, 1);
+                graphics.fillRoundedRect(13, 3, 22, 7, 3);
+                graphics.fillStyle(0xc5cbd0, 1);
+                graphics.fillRect(19, 7, 10, 2);
+            }
 
             // Arms
             graphics.fillStyle(0xf2d0b5, 1);
@@ -56,7 +78,15 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
     constructor(scene, x, y) {
 
-        super(scene, x, y, Player.createSpriteTexture(scene));
+        super(
+            scene,
+            x,
+            y,
+            Player.createSpriteTexture(
+                scene,
+                scene.character?.id || scene.registry.get('selectedCharacter')
+            )
+        );
 
         scene.add.existing(this);
         scene.physics.add.existing(this);
@@ -72,7 +102,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.body.setSize(18, 24);
         this.body.setOffset(15, 16);
 
-        this.speed = 200;
+        this.character = scene.character ||
+            getCharacterById(scene.registry.get('selectedCharacter'));
+        this.speed = 200 * this.character.speedMultiplier;
+        this.damageMultiplier = this.character.damageMultiplier;
         this.facingAngle = 0;
         this.soundEffects = this.scene.soundEffects;
 
@@ -80,8 +113,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         // HEALTH
         // =========================
 
-        this.maxHealth = 100;
-        this.health = 100;
+        this.maxHealth = this.character.maxHealth;
+        this.health = this.maxHealth;
 
         // =========================
         // PUNCH
@@ -167,20 +200,6 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.healthBg.setScrollFactor(1);
         this.healthBar.setScrollFactor(1);
 
-        this.weaponText =
-            scene.add.text(
-                20,
-                20,
-                'NO WEAPON',
-                {
-                    fontSize: '20px',
-                    color: '#ffffff',
-                    fontStyle: 'bold',
-                    stroke: '#000000',
-                    strokeThickness: 4
-                }
-            );
-
         this.ammoText =
             scene.add.text(
                 0,
@@ -209,41 +228,23 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                 }
             );
 
-        this.weaponText.setDepth(200000);
         this.ammoText.setDepth(200000);
         this.grenadeText.setDepth(200000);
-        this.weaponText.setOrigin(0, 0);
-        this.ammoText.setOrigin(0.5, 0);
-        this.grenadeText.setOrigin(0.5, 0);
-        this.weaponText.setScrollFactor(1);
+        this.ammoText.setOrigin(1, 0);
+        this.grenadeText.setOrigin(1, 0);
         this.ammoText.setScrollFactor(1);
         this.grenadeText.setScrollFactor(1);
 
-        this.weaponSlotBackgrounds = [];
-        this.weaponSlotTexts = [];
+        this.weaponListTexts = [];
         for (let index = 0; index < 4; index++) {
-            const x = scene.scale.width / 2 - 216 + index * 144;
-            const background = scene.add.rectangle(
-                x,
-                scene.scale.height - 34,
-                136,
-                54,
-                0x202020,
-                0.95
-            );
-            background.setStrokeStyle(2, 0x777777);
-            background.setScrollFactor(0);
-            background.setDepth(200000);
-            this.weaponSlotBackgrounds.push(background);
-
-            const text = scene.add.text(x, scene.scale.height - 34, '', {
-                fontSize: '13px',
+            const text = scene.add.text(0, 0, '', {
+                fontSize: '16px',
                 color: '#ffffff',
-                align: 'center',
                 fontStyle: 'bold',
-                lineSpacing: 2
-            }).setOrigin(0.5).setScrollFactor(0).setDepth(200001);
-            this.weaponSlotTexts.push(text);
+                stroke: '#000000',
+                strokeThickness: 3
+            }).setScrollFactor(1).setDepth(200001);
+            this.weaponListTexts.push(text);
         }
 
         // =========================
@@ -501,25 +502,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         for (let index = 0; index < this.weaponSlots.length; index++) {
             const slot = this.weaponSlots[index];
             const isSelected = index === this.selectedWeaponSlot;
-            const weaponInfo = getWeaponById(slot.type);
-            const name = slot.weapon?.name || weaponInfo?.name || slot.type;
-            const ammo = !slot.weapon
-                ? 'PICK UP'
-                : slot.weapon.isMelee
-                    ? 'MELEE'
-                    : `${slot.magazineAmmo}/${slot.reserveAmmo}`;
-
-            this.weaponSlotBackgrounds[index].setFillStyle(
-                isSelected ? 0x245c24 : 0x202020,
-                0.95
-            );
-            this.weaponSlotBackgrounds[index].setStrokeStyle(
-                2,
-                isSelected ? 0x55ff55 : 0x777777
-            );
-            this.weaponSlotTexts[index].setText(
-                `${index + 1}: ${name}\n${ammo}`
-            );
+            const name = slot.weapon?.name || 'no weapon';
+            const text = this.weaponListTexts[index];
+            text.setText(`${index + 1}. ${name}`);
+            text.setColor(isSelected ? '#55ff55' : '#ffffff');
         }
     }
 
@@ -541,28 +527,39 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             );
 
             if (distance < 35) {
-                const nextAmmo = applyAmmoPickup({
-                    magazineAmmo: this.magazineAmmo,
-                    reserveAmmo: this.reserveAmmo,
-                    pickupAmount: pickup.amount,
-                    maxAmmo: MAX_TOTAL_AMMO
-                });
+                this.storeCurrentWeaponSlot();
+                const result = distributeAmmoPickup(
+                    this.weaponSlots,
+                    pickup.amount,
+                    MAX_TOTAL_AMMO
+                );
+                if (result.ammoAdded === 0) {
+                    continue;
+                }
 
-                this.magazineAmmo = nextAmmo.magazineAmmo;
-                this.reserveAmmo = nextAmmo.reserveAmmo;
+                this.weaponSlots = result.weaponSlots;
+                for (const slot of this.weaponSlots) {
+                    if (
+                        slot.weapon &&
+                        !slot.weapon.isMelee &&
+                        slot.magazineAmmo === 0 &&
+                        slot.reserveAmmo > 0 &&
+                        slot.reloadUntil === 0
+                    ) {
+                        slot.reloadUntil = this.scene.time.now + this.reloadDelay;
+                    }
+                }
+
+                const activeSlot = this.weaponSlots[this.selectedWeaponSlot];
+                this.magazineAmmo = activeSlot.magazineAmmo;
+                this.reserveAmmo = activeSlot.reserveAmmo;
+                this.reloadUntil = activeSlot.reloadUntil;
+                this.updateWeaponBar();
 
                 pickup.destroy();
                 this.scene.ammoPickups = this.scene.ammoPickups.filter(
                     item => item !== pickup
                 );
-
-                if (
-                    this.weapon &&
-                    this.magazineAmmo === 0 &&
-                    this.reloadUntil === 0
-                ) {
-                    this.reloadUntil = this.scene.time.now + this.reloadDelay;
-                }
             }
         }
     }
@@ -683,7 +680,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
             if (distance <= blastRadius) {
                 const damage = 100 - (distance / blastRadius) * 70;
-                zombie.takeDamage(Math.max(20, damage));
+                zombie.takeDamage(
+                    Math.max(20, damage) * this.damageMultiplier
+                );
             }
         }
     }
@@ -777,7 +776,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             );
 
             if (distance <= this.weapon.range && angleDifference <= Math.PI / 3) {
-                zombie.takeDamage(this.weapon.damage);
+                zombie.takeDamage(
+                    this.weapon.damage * this.damageMultiplier
+                );
             }
         }
     }
@@ -845,7 +846,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                 this.x,
                 this.y,
                 angle + spread,
-                this.weapon.damage,
+                this.weapon.damage * this.damageMultiplier,
                 this.weapon.range
             ));
         }
@@ -901,13 +902,14 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                             strikeX,
                             strikeY,
                             this.swordSwing.angle,
-                            this.weapon.damage,
+                            this.weapon.damage * this.damageMultiplier,
                             420,
                             {
                                 type: 'energy',
                                 size: 36,
                                 speed: 460,
-                                hitRadius: 20
+                                hitRadius: 20,
+                                splashRadius: 100
                             }
                         );
 
@@ -1004,12 +1006,12 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
         this.healthBg.setPosition(
             hudX,
-            hudY
+            hudY + 30
         );
 
         this.healthBar.setPosition(
             hudX,
-            hudY
+            hudY + 30
         );
 
         if (
@@ -1029,9 +1031,6 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             this.reloadUntil = 0;
         }
 
-        const nameText =
-            this.weapon ? this.weapon.name : 'NO WEAPON';
-        this.weaponText.setText(nameText);
         this.ammoText.setText(
             this.weapon?.isMelee
                 ? 'MELEE'
@@ -1040,27 +1039,16 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                     : '--'
         );
         this.grenadeText.setText(`G: ${this.grenades}`);
-        this.weaponText.setPosition(hudX, hudY + 26);
-        this.grenadeText.setPosition(hudX + 180, hudY + 26);
-
-        const scoreText = this.scene.scoreText;
-        const view = this.scene.cameras.main.worldView;
-        const healthRight = hudX + this.healthBg.width;
-        const scoreLeft = scoreText.x - scoreText.width;
-        const availableGap = scoreLeft - healthRight;
-
-        if (availableGap >= this.ammoText.width + 16) {
-            this.ammoText.setPosition(
-                healthRight + availableGap / 2,
-                hudY
-            );
-        } else {
-            this.ammoText.setPosition(
-                view.left + view.width / 2,
-                hudY + 24
+        for (let index = 0; index < this.weaponListTexts.length; index++) {
+            this.weaponListTexts[index].setPosition(
+                hudX,
+                hudY + 56 + index * 20
             );
         }
-
+        const view = this.scene.cameras.main.worldView;
+        const rightHudX = view.right - 20;
+        this.ammoText.setPosition(rightHudX, hudY + 30);
+        this.grenadeText.setPosition(rightHudX, hudY + 56);
         this.updateWeaponBar();
 
         // =========================
@@ -1118,7 +1106,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
                 if (distance < 70) {
 
-                    zombie.takeDamage(20);
+                    zombie.takeDamage(20 * this.damageMultiplier);
                 }
             }
         }

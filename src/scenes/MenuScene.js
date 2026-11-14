@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+﻿import Phaser from 'phaser';
 
 export default class MenuScene extends Phaser.Scene {
     constructor() {
@@ -25,6 +25,7 @@ export default class MenuScene extends Phaser.Scene {
                 fontStyle: 'bold'
             }
         ).setOrigin(1, 0);
+
         this.loadCoins();
 
         // New Game button
@@ -108,12 +109,157 @@ export default class MenuScene extends Phaser.Scene {
             settings.setStyle({ color: '#ffffff' });
         });
 
-        // Credits button
-        const credits = this.add.text(400, 505, 'CREDITS', {
-            fontSize: '24px',
-            color: '#00ff37'
-        }).setOrigin(0.5);
+        this.createPromoCodePanel();
     }
+
+    createPromoCodePanel() {
+        const promoMarkup = `
+            <div style="
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                width: 260px;
+                font-family: Arial, sans-serif;
+            ">
+                <button id="promo-toggle-button" type="button" aria-expanded="false" style="
+                    align-self: flex-start;
+                    border: 2px solid #75ff75;
+                    border-radius: 6px;
+                    background: #168a35;
+                    color: #ffffff;
+                    font-size: 18px;
+                    font-weight: bold;
+                    letter-spacing: 1px;
+                    padding: 10px 14px;
+                    cursor: pointer;
+                    box-shadow: 0 3px 0 #0b4d1d;
+                ">PROMOCODE</button>
+                <div id="promo-code-form" style="
+                    display: none;
+                    flex-direction: column;
+                    gap: 8px;
+                    width: 260px;
+                    padding: 10px 12px;
+                    border-radius: 8px;
+                    border: 2px solid #168a35;
+                    background: rgba(20, 20, 20, 0.95);
+                ">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input id="promo-code-input" type="text" maxlength="20" placeholder="ENTER CODE" style="
+                            flex: 1;
+                            min-width: 0;
+                            font-size: 14px;
+                            padding: 8px 10px;
+                            border-radius: 6px;
+                            border: 1px solid #666;
+                            background: rgba(255, 255, 255, 0.08);
+                            color: #ffffff;
+                            outline: none;
+                        ">
+                        <button id="promo-code-button" type="button" style="
+                            border: none;
+                            border-radius: 6px;
+                            background: #168a35;
+                            color: #ffffff;
+                            font-weight: bold;
+                            padding: 8px 10px;
+                            cursor: pointer;
+                        ">Redeem</button>
+                    </div>
+                    <div id="promo-code-status" style="font-size: 12px; color: #d4d4d4; min-height: 15px;">Enter a promo code to get rewards.</div>
+                </div>
+            </div>
+        `;
+
+        this.promoPanel = this.add.dom(400, 505).createFromHTML(promoMarkup);
+        this.promoPanel.setOrigin(0.5, 0.5);
+        this.promoPanel.setDepth(200000);
+
+        this.promoToggleButton = this.promoPanel.getChildByID('promo-toggle-button');
+        this.promoForm = this.promoPanel.getChildByID('promo-code-form');
+        this.promoInput = this.promoPanel.getChildByID('promo-code-input');
+        this.promoButton = this.promoPanel.getChildByID('promo-code-button');
+        this.promoStatus = this.promoPanel.getChildByID('promo-code-status');
+
+        this.promoToggleButton.addEventListener('click', () => {
+            const isOpen = this.promoForm.style.display !== 'none';
+            this.promoForm.style.display = isOpen ? 'none' : 'flex';
+            this.promoToggleButton.setAttribute('aria-expanded', String(!isOpen));
+
+            if (!isOpen) {
+                this.promoInput.focus();
+            }
+        });
+
+        this.promoInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                this.redeemPromoCode();
+            }
+        });
+
+        this.promoButton.addEventListener('click', () => {
+            this.redeemPromoCode();
+        });
+    }
+
+    setPromoStatus(message, color = '#d4d4d4') {
+        if (!this.promoStatus) return;
+        this.promoStatus.textContent = message;
+        this.promoStatus.style.color = color;
+    }
+
+    async redeemPromoCode() {
+        const token = this.registry.get('authToken');
+        const code = this.promoInput?.value?.trim() || '';
+
+        if (!code) {
+            this.setPromoStatus('Enter a promo code first.', '#ffb3b3');
+            return;
+        }
+
+        if (!token) {
+            this.setPromoStatus('Log in first to redeem rewards.', '#ffb3b3');
+            return;
+        }
+
+        this.setPromoStatus('Checking code...', '#ffcc66');
+
+        const serverUrl = import.meta.env.DEV
+            ? 'http://localhost:3001'
+            : 'https://zombie-escape-2qlc.onrender.com';
+
+        try {
+            const response = await fetch(`${serverUrl}/promo/redeem`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ code })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || 'The promo code could not be used.');
+            }
+
+            if (Number.isInteger(result.coins)) {
+                this.registry.set('coins', result.coins);
+                this.coinsText.setText(`Coins: ${result.coins}`);
+            }
+
+            if (Array.isArray(result.ownedWeapons)) {
+                this.registry.set('ownedWeapons', result.ownedWeapons);
+            }
+
+            this.promoInput.value = '';
+            this.setPromoStatus(result.message || 'Promo redeemed!', '#7ef29a');
+        } catch (error) {
+            this.setPromoStatus(error.message || 'Promo code failed.', '#ffb3b3');
+        }
+    }
+
     async loadCoins() {
         const token = this.registry.get('authToken');
         if (!token) return;

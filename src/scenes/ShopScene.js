@@ -11,7 +11,7 @@ export default class ShopScene extends Phaser.Scene {
         this.ownedWeapons = this.registry.get('ownedWeapons') || [];
         this.pendingPurchases = new Set();
 
-        this.add.text(400, 48, 'WEAPON SHOP', {
+        this.add.text(400, 38, 'SHOP', {
             fontSize: '38px',
             color: '#ffffff',
             fontStyle: 'bold'
@@ -24,6 +24,21 @@ export default class ShopScene extends Phaser.Scene {
             { fontSize: '20px', color: '#ffd45c', fontStyle: 'bold' }
         ).setOrigin(1, 0);
 
+        this.weaponCategoryButton = this.add.text(340, 82, 'WEAPONS', {
+            fontSize: '18px',
+            color: '#ffffff',
+            backgroundColor: '#245c24',
+            padding: { x: 16, y: 8 }
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        this.specialCategoryButton = this.add.text(460, 82, 'SPECIAL', {
+            fontSize: '18px',
+            color: '#ffffff',
+            backgroundColor: '#333333',
+            padding: { x: 16, y: 8 }
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        this.weaponCategoryButton.on('pointerdown', () => this.showCategory('weapons'));
+        this.specialCategoryButton.on('pointerdown', () => this.showCategory('special'));
+
         this.statusText = this.add.text(400, 510, '', {
             fontSize: '16px',
             color: '#ffff66',
@@ -32,17 +47,18 @@ export default class ShopScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         this.weaponButtons = new Map();
+        this.weaponItems = [];
         WEAPON_CATALOG.forEach((weapon, index) => {
             const column = index % 2;
             const row = Math.floor(index / 2);
             const x = 20 + column * 390;
-            const y = 105 + row * 95;
+            const y = 122 + row * 88;
 
-            this.add.rectangle(x + 180, y + 38, 370, 84, 0x202020)
+            const card = this.add.rectangle(x + 180, y + 38, 370, 80, 0x202020)
                 .setStrokeStyle(1, 0x555555)
                 .setOrigin(0.5);
 
-            this.add.text(x + 10, y + 8, `${weapon.name}  -  ${weapon.rarity}`, {
+            const title = this.add.text(x + 10, y + 8, `${weapon.name}  -  ${weapon.rarity}`, {
                 fontSize: '17px',
                 color: '#ffffff',
                 fontStyle: 'bold'
@@ -51,7 +67,7 @@ export default class ShopScene extends Phaser.Scene {
             const details = weapon.category === 'Melee'
                 ? `${weapon.category} | Damage ${weapon.damage} | ${weapon.attackSpeed}`
                 : `${weapon.category} | Damage ${weapon.damage}${weapon.pellets ? ' x ' + weapon.pellets + ' pellets' : ''} | Magazine ${weapon.magazineSize}`;
-            this.add.text(x + 10, y + 38, details, {
+            const detailText = this.add.text(x + 10, y + 38, details, {
                 fontSize: '13px',
                 color: '#bbbbbb'
             });
@@ -64,6 +80,7 @@ export default class ShopScene extends Phaser.Scene {
             }).setOrigin(0.5);
 
             this.weaponButtons.set(weapon.id, button);
+            this.weaponItems.push(card, title, detailText, button);
             button.setInteractive({ useHandCursor: true });
             this.updateWeaponButton(weapon.id);
             button.on('pointerover', () => {
@@ -75,19 +92,43 @@ export default class ShopScene extends Phaser.Scene {
             button.on('pointerdown', () => this.purchaseWeapon(weapon.id));
         });
 
-        const backButton = this.add.text(400, 565, 'BACK', {
-            fontSize: '20px',
+        const characterShop = this.add.text(400, 565, 'CHARACTERS', {
+            fontSize: '19px',
+            color: '#ffffff',
+            backgroundColor: '#245c24',
+            padding: { x: 22, y: 9 }
+        }).setOrigin(0.5);
+        characterShop.setInteractive({ useHandCursor: true });
+        characterShop.on('pointerover', () => characterShop.setStyle({ color: '#ffff00' }));
+        characterShop.on('pointerout', () => characterShop.setStyle({ color: '#ffffff' }));
+        characterShop.on('pointerdown', () => this.scene.start('CharacterShopScene'));
+
+        const backButton = this.add.text(735, 565, 'BACK', {
+            fontSize: '17px',
             color: '#ffffff',
             backgroundColor: '#333333',
-            padding: { x: 18, y: 8 }
+            padding: { x: 14, y: 8 }
         }).setOrigin(0.5);
-
         backButton.setInteractive({ useHandCursor: true });
         backButton.on('pointerover', () => backButton.setStyle({ color: '#ffff00' }));
         backButton.on('pointerout', () => backButton.setStyle({ color: '#ffffff' }));
         backButton.on('pointerdown', () => this.scene.start('MenuScene'));
 
+        this.showCategory('weapons');
         this.loadInventory();
+    }
+
+    showCategory(category) {
+        const showWeapons = category === 'weapons';
+        for (const item of this.weaponItems) {
+            item.setVisible(showWeapons);
+        }
+        this.weaponCategoryButton.setStyle({
+            backgroundColor: showWeapons ? '#245c24' : '#333333'
+        });
+        this.specialCategoryButton.setStyle({
+            backgroundColor: showWeapons ? '#333333' : '#245c24'
+        });
     }
 
     updateWeaponButton(weaponId) {
@@ -130,6 +171,12 @@ export default class ShopScene extends Phaser.Scene {
             this.registry.set('ownedWeapons', this.ownedWeapons);
             if (Array.isArray(result.spawnWeapons)) {
                 this.registry.set('spawnWeapons', result.spawnWeapons);
+            }
+            if (Array.isArray(result.ownedCharacters)) {
+                this.registry.set('ownedCharacters', result.ownedCharacters);
+            }
+            if (typeof result.selectedCharacter === 'string') {
+                this.registry.set('selectedCharacter', result.selectedCharacter);
             }
             this.registry.set('coins', result.coins);
             this.coinsText.setText(`Coins: ${result.coins}`);

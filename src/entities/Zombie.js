@@ -1,4 +1,5 @@
  import Phaser from 'phaser';
+ import { ZOMBIE_TYPES } from '../utils/zombieTypes.js';
 
 export default class Zombie extends Phaser.Physics.Arcade.Sprite {
 
@@ -53,9 +54,17 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
         return textureKey;
     }
 
-    constructor(scene, x, y) {
+    constructor(scene, x, y, type = 'normal') {
 
         super(scene, x, y, Zombie.createSpriteTexture(scene));
+
+        const stats = ZOMBIE_TYPES[type];
+        if (!stats) {
+            throw new RangeError(`Unknown zombie type: ${type}`);
+        }
+
+        this.type = type;
+        this.stats = stats;
 
         scene.add.existing(this);
         scene.physics.add.existing(this);
@@ -66,17 +75,19 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
         // APPEARANCE
         // =========================
 
-        this.setDisplaySize(50, 50);
+        this.setDisplaySize(stats.displaySize, stats.displaySize);
         this.setOrigin(0.5, 0.5);
         this.setDepth(12);
-        this.body.setSize(24, 30);
-        this.body.setOffset(20, 18);
+        const bodyScale = stats.displaySize / 50;
+        this.body.setSize(24 * bodyScale, 30 * bodyScale);
+        this.body.setOffset(20 * bodyScale, 18 * bodyScale);
+        this.setTint(stats.tint);
 
         // =========================
         // MOVEMENT
         // =========================
 
-        this.speed = 60;
+        this.speed = stats.speed;
 
         // Start chasing within this distance
         this.chaseDistance = 700;
@@ -85,14 +96,14 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
         // HEALTH
         // =========================
 
-        this.maxHealth = 100;
-        this.health = 100;
+        this.maxHealth = stats.health;
+        this.health = stats.health;
 
         // =========================
         // ATTACK
         // =========================
 
-        this.attackDamage = 10;
+        this.attackDamage = stats.damagePerSecond;
 
         this.attackCooldown = 1000;
 
@@ -102,9 +113,10 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
         // HEALTH BAR
         // =========================
 
+        this.healthBarOffset = stats.displaySize / 2 + 10;
         this.healthBarBg = scene.add.rectangle(
             x,
-            y - 35,
+            y - this.healthBarOffset,
             50,
             7,
             0x222222
@@ -112,7 +124,7 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
 
         this.healthBar = scene.add.rectangle(
             x,
-            y - 35,
+            y - this.healthBarOffset,
             46,
             5,
             0xff0000
@@ -538,12 +550,12 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
 
         this.healthBarBg.setPosition(
             this.x,
-            this.y - 35
+            this.y - this.healthBarOffset
         );
 
         this.healthBar.setPosition(
             this.x,
-            this.y - 35
+            this.y - this.healthBarOffset
         );
 
         this.lastPosition.x = this.x;

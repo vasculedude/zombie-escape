@@ -7,9 +7,14 @@ import { randomBytes } from 'crypto';
 import pg from 'pg';
 import {
     getSpawnableWeaponIds,
+    STARTER_WEAPON_CATALOG,
     WEAPON_CATALOG,
     getWeaponPrice
 } from './weaponCatalog.js';
+import {
+    CHARACTER_CATALOG,
+    DEFAULT_CHARACTER_ID
+} from '../src/utils/characterCatalog.js';
 
 const app = express();
 app.use(express.json());
@@ -39,6 +44,14 @@ app.use(cors({
 }));
 
 const { Pool } = pg;
+
+const PROMO_REWARDS = Object.freeze({
+    STARTER: { coins: 250, label: 'Starter bonus' },
+    SURVIVOR: { coins: 500, label: 'Survivor stash' },
+    ZOMBIE: { coins: 1000, label: 'Zombie hunter bonus' },
+    RUSH: { coins: 500, weaponId: 'pistol', label: 'Pistol bonus' },
+    HIGHGATE: { coins: 1000, label: 'Highgate bonus' }
+});
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -77,6 +90,21 @@ async function initialiseDatabase() {
         ALTER TABLE users
         ADD COLUMN IF NOT EXISTS spawn_weapons TEXT[] NOT NULL
         DEFAULT ARRAY['blaster', 'rapid', 'heavy', 'sword']::TEXT[]
+    `);
+
+    await pool.query(`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS redeemed_promos TEXT[] NOT NULL DEFAULT '{}'
+    `);
+
+    await pool.query(`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS owned_characters TEXT[] NOT NULL DEFAULT '{}'
+    `);
+
+    await pool.query(`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS selected_character TEXT NOT NULL DEFAULT 'survivor'
     `);
 
     console.log('Neon database connected and ready!');
@@ -158,7 +186,7 @@ app.post('/login', async (req, res) => {
         }
 
         const result = await pool.query(
-            'SELECT username, password_hash, coins, owned_weapons, spawn_weapons FROM users WHERE username_key = $1',
+            'SELECT username, password_hash, coins, owned_weapons, spawn_weapons, owned_characters, selected_character FROM users WHERE username_key = $1',
             [username.toLowerCase()]
         );
 
@@ -177,7 +205,7 @@ app.post('/login', async (req, res) => {
             `UPDATE users
              SET session_token = $1
              WHERE username_key = $2
-             RETURNING coins, owned_weapons, spawn_weapons`,
+             RETURNING coins, owned_weapons, spawn_weapons, owned_characters, selected_character`,
             [token, username.toLowerCase()]
         );
 
@@ -187,7 +215,9 @@ app.post('/login', async (req, res) => {
             token,
             coins: updatedUser.rows[0].coins,
             ownedWeapons: updatedUser.rows[0].owned_weapons,
-            spawnWeapons: updatedUser.rows[0].spawn_weapons
+            spawnWeapons: updatedUser.rows[0].spawn_weapons,
+            ownedCharacters: updatedUser.rows[0].owned_characters,
+            selectedCharacter: updatedUser.rows[0].selected_character
         });
     } catch (error) {
         console.error('Login error:', error);
@@ -214,7 +244,7 @@ async function authenticate(req, res, next) {
         }
 
         const result = await pool.query(
-            'SELECT username_key, coins, owned_weapons, spawn_weapons FROM users WHERE session_token = $1',
+            'SELECT username_key, coins, owned_weapons, spawn_weapons, owned_characters, selected_character FROM users WHERE session_token = $1',
             [token]
         );
 
@@ -239,6 +269,73 @@ app.get('/coins', authenticate, (req, res) => {
         success: true,
         coins: req.user.coins
     });
+});
+
+app.post('/promo/redeem', authenticate, async (req, res) => {
+    try {
+        const rawCode = req.body?.code;
+        const code = typeof rawCode === 'string'
+            ? rawCode.trim().toUpperCase()
+            : '';
+
+        const reward = PROMO_REWARDS[code];
+
+        if (!reward) {
+            return res.status(400).json({
+                success: false,
+                message: 'Unknown promo code.'
+            });
+        }
+
+        const result = await pool.query(
+            `UPDATE users
+             SET
+                 coins = coins + $1,
+                 owned_weapons = CASE
+                     WHEN $2::text IS NULL THEN owned_weapons
+                     WHEN $2 = ANY(owned_weapons) THEN owned_weapons
+                     ELSE array_append(owned_weapons, $2)
+                 END,
+                 redeemed_promos = array_append(redeemed_promos, $3)
+             WHERE username_key = $4
+               AND NOT ($3 = ANY(redeemed_promos))
+             RETURNING coins, owned_weapons`,
+            [reward.coins, reward.weaponId || null, code, req.user.username_key]
+        );
+
+        if (result.rows.length === 0) {
+            const currentUser = await pool.query(
+                'SELECT redeemed_promos FROM users WHERE username_key = $1',
+                [req.user.username_key]
+            );
+            const user = currentUser.rows[0];
+
+            if (!user) {
+                return res.status(401).json({
+                    success: false,
+                    message: 'Please log in again.'
+                });
+            }
+
+            return res.status(409).json({
+                success: false,
+                message: `Promo code ${code} has already been redeemed.`
+            });
+        }
+
+        return res.json({
+            success: true,
+            message: `${reward.label} applied!`,
+            coins: result.rows[0].coins,
+            ownedWeapons: result.rows[0].owned_weapons || []
+        });
+    } catch (error) {
+        console.error('Promo redemption error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Could not redeem promo code.'
+        });
+    }
 });
 
 // ADD COINS
@@ -277,14 +374,18 @@ app.get('/weapons', authenticate, (req, res) => {
         success: true,
         coins: req.user.coins,
         ownedWeapons: req.user.owned_weapons,
-        spawnWeapons: req.user.spawn_weapons
+        spawnWeapons: req.user.spawn_weapons,
+        ownedCharacters: req.user.owned_characters,
+        selectedCharacter: req.user.selected_character
     });
 });
 
 app.post('/armory', authenticate, async (req, res) => {
     try {
         const weaponIds = req.body?.weaponIds;
-        const availableWeaponIds = getSpawnableWeaponIds(req.user.owned_weapons);
+        const availableWeaponIds = getSpawnableWeaponIds(
+            req.user.owned_weapons
+        );
 
         if (
             !Array.isArray(weaponIds) ||
@@ -326,6 +427,119 @@ app.post('/armory', authenticate, async (req, res) => {
     }
 });
 
+app.post('/characters/purchase', authenticate, async (req, res) => {
+    try {
+        const characterId = req.body?.characterId;
+        const character = CHARACTER_CATALOG.find(
+            item => item.id === characterId &&
+                item.id !== DEFAULT_CHARACTER_ID
+        );
+        if (!character) {
+            return res.status(400).json({
+                success: false,
+                message: 'Unknown character.'
+            });
+        }
+
+        const result = await pool.query(
+            `UPDATE users
+             SET coins = coins - $1,
+                 owned_characters = array_append(owned_characters, $2)
+             WHERE username_key = $3
+               AND coins >= $1
+               AND NOT ($2 = ANY(owned_characters))
+             RETURNING coins, owned_characters`,
+            [character.price, character.id, req.user.username_key]
+        );
+
+        if (result.rows.length > 0) {
+            return res.json({
+                success: true,
+                coins: result.rows[0].coins,
+                ownedCharacters: result.rows[0].owned_characters
+            });
+        }
+
+        const current = await pool.query(
+            'SELECT coins, owned_characters FROM users WHERE username_key = $1',
+            [req.user.username_key]
+        );
+        const user = current.rows[0];
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Please log in again.'
+            });
+        }
+        if (user.owned_characters.includes(character.id)) {
+            return res.status(409).json({
+                success: false,
+                message: 'You already own this character.'
+            });
+        }
+
+        return res.status(400).json({
+            success: false,
+            message: `You need ${character.price} coins to buy this character.`
+        });
+    } catch (error) {
+        console.error('Character purchase error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Could not purchase character.'
+        });
+    }
+});
+
+app.post('/characters/select', authenticate, async (req, res) => {
+    try {
+        const characterId = req.body?.characterId;
+        const character = CHARACTER_CATALOG.find(
+            item => item.id === characterId
+        );
+        if (!character) {
+            return res.status(400).json({
+                success: false,
+                message: 'Unknown character.'
+            });
+        }
+        if (
+            character.id !== DEFAULT_CHARACTER_ID &&
+            !req.user.owned_characters.includes(character.id)
+        ) {
+            return res.status(403).json({
+                success: false,
+                message: 'You do not own this character.'
+            });
+        }
+
+        const result = await pool.query(
+            `UPDATE users
+             SET selected_character = $1
+             WHERE username_key = $2
+             RETURNING selected_character`,
+            [character.id, req.user.username_key]
+        );
+        if (result.rows.length === 0) {
+            return res.status(401).json({
+                success: false,
+                message: 'Please log in again.'
+            });
+        }
+
+        return res.json({
+            success: true,
+            selectedCharacter: result.rows[0].selected_character
+        });
+    } catch (error) {
+        console.error('Character selection error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Could not save your character choice.'
+        });
+    }
+});
+
 // PURCHASE WEAPON
 app.post('/weapons/purchase', authenticate, async (req, res) => {
     try {
@@ -338,7 +552,6 @@ app.post('/weapons/purchase', authenticate, async (req, res) => {
                 message: 'Unknown weapon.'
             });
         }
-
         const price = getWeaponPrice(weapon.id);
 
         const result = await pool.query(

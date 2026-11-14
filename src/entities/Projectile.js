@@ -61,6 +61,7 @@ export default class Projectile extends Phaser.Physics.Arcade.Sprite {
         this.damage = damage;
         this.range = range;
         this.hitRadius = options.hitRadius ?? 25;
+        this.splashRadius = options.splashRadius ?? 0;
 
         this.startX = x;
         this.startY = y;

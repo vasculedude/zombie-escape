@@ -18,6 +18,50 @@ export default class Weapon extends Phaser.GameObjects.Image {
                 add: false
             });
 
+            if (type === 'sword') {
+                graphics.fillStyle(0x263244, 1);
+                graphics.fillPoints([
+                    { x: 4, y: 59 },
+                    { x: 35, y: 20 },
+                    { x: 42, y: 24 },
+                    { x: 11, y: 61 }
+                ], true);
+                graphics.fillStyle(0x9caec2, 1);
+                graphics.fillPoints([
+                    { x: 6, y: 57 },
+                    { x: 35, y: 22 },
+                    { x: 39, y: 25 },
+                    { x: 10, y: 59 }
+                ], true);
+                graphics.fillStyle(0xe0e8ef, 1);
+                graphics.fillPoints([
+                    { x: 7, y: 56 },
+                    { x: 35, y: 23 },
+                    { x: 36, y: 25 },
+                    { x: 10, y: 59 }
+                ], true);
+
+                graphics.lineStyle(3, 0x9b5b28, 1);
+                graphics.lineBetween(39, 20, 57, 2);
+                graphics.lineStyle(2, 0xd79a50, 1);
+                graphics.lineBetween(41, 20, 58, 3);
+                graphics.lineStyle(2, 0x6f321f, 1);
+                graphics.lineBetween(45, 18, 54, 9);
+                graphics.lineStyle(2, 0xd8a24c, 1);
+                graphics.lineBetween(38, 19, 51, 32);
+                graphics.lineStyle(3, 0x9a5a26, 1);
+                graphics.lineBetween(37, 20, 50, 33);
+                graphics.lineStyle(2, 0xf0c06a, 1);
+                graphics.lineBetween(36, 21, 49, 34);
+                graphics.fillStyle(0xd39b4a, 1);
+                graphics.fillCircle(58, 3, 4);
+                graphics.fillStyle(0xf1c46d, 1);
+                graphics.fillCircle(58, 3, 2);
+                graphics.generateTexture(textureKey, 64, 64);
+                graphics.destroy();
+                return textureKey;
+            }
+
             const accent = weapon.category === 'Melee'
                 ? 0xc4c4c4
                 : type === 'blaster'
@@ -42,11 +86,6 @@ export default class Weapon extends Phaser.GameObjects.Image {
                 } else if (type === 'hammer') {
                     graphics.fillRect(21, 4, 6, 21);
                     graphics.fillRoundedRect(11, 3, 26, 8, 2);
-                } else if (type === 'sword') {
-                    graphics.fillStyle(0xc4c4c4, 1);
-                    graphics.fillRoundedRect(17, 2, 8, 22, 2);
-                    graphics.fillRect(14, 22, 14, 6);
-                    graphics.fillTriangle(12, 1, 24, 1, 18, 12);
                 } else {
                     graphics.fillTriangle(24, 1, 14, 20, 34, 20);
                     graphics.fillRect(21, 18, 6, 11);
@@ -115,7 +154,7 @@ export default class Weapon extends Phaser.GameObjects.Image {
         // VISUAL
         // =========================
 
-        this.setDisplaySize(48, 32);
+        this.setDisplaySize(type === 'sword' ? 48 : 48, type === 'sword' ? 48 : 32);
         this.setDepth(10);
     }
 }
