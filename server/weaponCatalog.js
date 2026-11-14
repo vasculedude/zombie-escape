@@ -1,7 +1,7 @@
 export const WEAPON_PRICES = Object.freeze({
     Common: 500,
     Uncommon: 1000,
-    Rare: 2500
+    Rare: 2000
 });
 
 export const STARTER_WEAPON_CATALOG = [
@@ -107,9 +107,9 @@ export const WEAPON_CATALOG = [
     },
     {
         id: 'assault_rifle',
-        name: 'Assault Rifle',
+        name: 'Minigun',
         category: 'Gun',
-        rarity: 'Uncommon',
+        rarity: 'Rare',
         damage: 15,
         range: 400,
         fireRate: 150,

@@ -299,6 +299,19 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                 .setScrollFactor(0)
                 .setDepth(200000);
 
+            const rewardText = this.scene.add.text(
+                400,
+                340,
+                `Run coins: ${this.scene.runCoins} | Death payout: ${this.scene.runReward}`,
+                {
+                    fontSize: '18px',
+                    color: '#ffd45c',
+                    fontStyle: 'bold',
+                    stroke: '#000000',
+                    strokeThickness: 3
+                }
+            ).setOrigin(0.5).setScrollFactor(0).setDepth(200000);
+
             const addDefeatButton = (label, x, onClick) => {
                 const button = this.scene.add.text(
                     x,
@@ -341,6 +354,17 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                     leavingRun = false;
                 });
             };
+
+            this.scene.saveRunReward().then(() => {
+                rewardText.setText(
+                    this.scene.runReward > 0
+                        ? `Run coins: ${this.scene.runCoins} | Saved: ${this.scene.runReward}`
+                        : `Run coins: ${this.scene.runCoins} | No payout at this survival time`
+                );
+            }).catch(error => {
+                console.error('Could not save run rewards:', error);
+                rewardText.setText('COINS COULD NOT BE SAVED - choose an option to retry');
+            });
 
             addDefeatButton('HOME', 320, () => {
                 saveThen(() => this.scene.scene.start('MenuScene'));

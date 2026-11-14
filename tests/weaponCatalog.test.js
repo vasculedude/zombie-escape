@@ -13,7 +13,7 @@ test('weapons are priced by rarity and have unique ids', () => {
   assert.deepEqual(WEAPON_PRICES, {
     Common: 500,
     Uncommon: 1000,
-    Rare: 2500
+    Rare: 2000
   });
   assert.equal(WEAPON_CATALOG.length, 8);
   assert.equal(new Set(WEAPON_CATALOG.map(weapon => weapon.id)).size, 8);
@@ -28,7 +28,8 @@ test('weapons are priced by rarity and have unique ids', () => {
   }
   assert.equal(getWeaponPrice('pistol'), 500);
   assert.equal(getWeaponPrice('machete'), 1000);
-  assert.equal(getWeaponPrice('sniper_rifle'), 2500);
+  assert.equal(getWeaponPrice('sniper_rifle'), 2000);
+  assert.equal(getWeaponPrice('assault_rifle'), 2000);
 });
 
 test('catalog includes the requested magazine sizes and damage values', () => {
@@ -37,6 +38,8 @@ test('catalog includes the requested magazine sizes and damage values', () => {
   assert.equal(getWeaponById('shotgun').magazineSize, 5);
   assert.equal(getWeaponById('assault_rifle').damage, 15);
   assert.equal(getWeaponById('assault_rifle').magazineSize, 30);
+  assert.equal(getWeaponById('assault_rifle').name, 'Minigun');
+  assert.equal(getWeaponById('assault_rifle').rarity, 'Rare');
   assert.equal(getWeaponById('sniper_rifle').damage, 75);
   assert.equal(getWeaponById('sniper_rifle').magazineSize, 5);
 });
