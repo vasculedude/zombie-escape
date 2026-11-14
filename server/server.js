@@ -15,6 +15,12 @@ import {
     CHARACTER_CATALOG,
     DEFAULT_CHARACTER_ID
 } from '../src/utils/characterCatalog.js';
+import {
+    getMaxWeaponSelections,
+    getSpawnableSurvivalItemIds,
+    getSurvivalItemPrice,
+    SURVIVAL_ITEM_CATALOG
+} from '../src/utils/survivalItemCatalog.js';
 
 const app = express();
 app.use(express.json());
@@ -107,6 +113,16 @@ async function initialiseDatabase() {
         ADD COLUMN IF NOT EXISTS selected_character TEXT NOT NULL DEFAULT 'survivor'
     `);
 
+    await pool.query(`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS owned_specials TEXT[] NOT NULL DEFAULT '{}'
+    `);
+
+    await pool.query(`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS spawn_specials TEXT[] NOT NULL DEFAULT '{}'
+    `);
+
     console.log('Neon database connected and ready!');
 }
 
@@ -186,7 +202,7 @@ app.post('/login', async (req, res) => {
         }
 
         const result = await pool.query(
-            'SELECT username, password_hash, coins, owned_weapons, spawn_weapons, owned_characters, selected_character FROM users WHERE username_key = $1',
+            'SELECT username, password_hash, coins, owned_weapons, spawn_weapons, owned_characters, selected_character, owned_specials, spawn_specials FROM users WHERE username_key = $1',
             [username.toLowerCase()]
         );
 
@@ -205,7 +221,7 @@ app.post('/login', async (req, res) => {
             `UPDATE users
              SET session_token = $1
              WHERE username_key = $2
-             RETURNING coins, owned_weapons, spawn_weapons, owned_characters, selected_character`,
+             RETURNING coins, owned_weapons, spawn_weapons, owned_characters, selected_character, owned_specials, spawn_specials`,
             [token, username.toLowerCase()]
         );
 
@@ -217,7 +233,9 @@ app.post('/login', async (req, res) => {
             ownedWeapons: updatedUser.rows[0].owned_weapons,
             spawnWeapons: updatedUser.rows[0].spawn_weapons,
             ownedCharacters: updatedUser.rows[0].owned_characters,
-            selectedCharacter: updatedUser.rows[0].selected_character
+            selectedCharacter: updatedUser.rows[0].selected_character,
+            ownedSpecials: updatedUser.rows[0].owned_specials,
+            spawnSpecials: updatedUser.rows[0].spawn_specials
         });
     } catch (error) {
         console.error('Login error:', error);
@@ -244,7 +262,7 @@ async function authenticate(req, res, next) {
         }
 
         const result = await pool.query(
-            'SELECT username_key, coins, owned_weapons, spawn_weapons, owned_characters, selected_character FROM users WHERE session_token = $1',
+            'SELECT username_key, coins, owned_weapons, spawn_weapons, owned_characters, selected_character, owned_specials, spawn_specials FROM users WHERE session_token = $1',
             [token]
         );
 
@@ -376,7 +394,9 @@ app.get('/weapons', authenticate, (req, res) => {
         ownedWeapons: req.user.owned_weapons,
         spawnWeapons: req.user.spawn_weapons,
         ownedCharacters: req.user.owned_characters,
-        selectedCharacter: req.user.selected_character
+        selectedCharacter: req.user.selected_character,
+        ownedSpecials: req.user.owned_specials,
+        spawnSpecials: req.user.spawn_specials
     });
 });
 
@@ -386,25 +406,42 @@ app.post('/armory', authenticate, async (req, res) => {
         const availableWeaponIds = getSpawnableWeaponIds(
             req.user.owned_weapons
         );
+        const maxWeaponSelections = getMaxWeaponSelections(req.user.owned_specials);
+        const specialIds = req.body?.specialIds ?? req.user.spawn_specials;
+        const availableSpecialIds = getSpawnableSurvivalItemIds(
+            req.user.owned_specials
+        );
 
         if (
             !Array.isArray(weaponIds) ||
-            weaponIds.length !== 4 ||
-            new Set(weaponIds).size !== 4 ||
+            weaponIds.length !== maxWeaponSelections ||
+            new Set(weaponIds).size !== maxWeaponSelections ||
             weaponIds.some(id => !availableWeaponIds.includes(id))
         ) {
             return res.status(400).json({
                 success: false,
-                message: 'Choose exactly four weapons that you own.'
+                message: `Choose exactly ${maxWeaponSelections} weapons that you own.`
+            });
+        }
+
+        if (
+            !Array.isArray(specialIds) ||
+            new Set(specialIds).size !== specialIds.length ||
+            specialIds.some(id => !availableSpecialIds.includes(id))
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: 'Choose only survival items that you own.'
             });
         }
 
         const result = await pool.query(
             `UPDATE users
-             SET spawn_weapons = $1
-             WHERE username_key = $2
-             RETURNING spawn_weapons`,
-            [weaponIds, req.user.username_key]
+             SET spawn_weapons = $1,
+                 spawn_specials = $2
+             WHERE username_key = $3
+             RETURNING spawn_weapons, spawn_specials`,
+            [weaponIds, specialIds, req.user.username_key]
         );
 
         if (result.rows.length === 0) {
@@ -416,7 +453,8 @@ app.post('/armory', authenticate, async (req, res) => {
 
         return res.json({
             success: true,
-            spawnWeapons: result.rows[0].spawn_weapons
+            spawnWeapons: result.rows[0].spawn_weapons,
+            spawnSpecials: result.rows[0].spawn_specials
         });
     } catch (error) {
         console.error('Armory save error:', error);
@@ -536,6 +574,70 @@ app.post('/characters/select', authenticate, async (req, res) => {
         return res.status(500).json({
             success: false,
             message: 'Could not save your character choice.'
+        });
+    }
+});
+
+app.post('/specials/purchase', authenticate, async (req, res) => {
+    try {
+        const item = SURVIVAL_ITEM_CATALOG.find(
+            candidate => candidate.id === req.body?.itemId
+        );
+        if (!item) {
+            return res.status(400).json({
+                success: false,
+                message: 'Unknown survival item.'
+            });
+        }
+
+        const price = getSurvivalItemPrice(item.id);
+        const result = await pool.query(
+            `UPDATE users
+             SET coins = coins - $1,
+                 owned_specials = array_append(owned_specials, $2)
+             WHERE username_key = $3
+               AND coins >= $1
+               AND NOT ($2 = ANY(owned_specials))
+             RETURNING coins, owned_specials`,
+            [price, item.id, req.user.username_key]
+        );
+
+        if (result.rows.length > 0) {
+            return res.json({
+                success: true,
+                coins: result.rows[0].coins,
+                ownedSpecials: result.rows[0].owned_specials
+            });
+        }
+
+        const current = await pool.query(
+            'SELECT coins, owned_specials FROM users WHERE username_key = $1',
+            [req.user.username_key]
+        );
+        const user = current.rows[0];
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Please log in again.'
+            });
+        }
+
+        if (user.owned_specials.includes(item.id)) {
+            return res.status(409).json({
+                success: false,
+                message: 'You already own this survival item.'
+            });
+        }
+
+        return res.status(400).json({
+            success: false,
+            message: `You need ${price} coins to buy this item.`
+        });
+    } catch (error) {
+        console.error('Survival item purchase error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Could not purchase this survival item.'
         });
     }
 });

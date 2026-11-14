@@ -105,6 +105,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.character = scene.character ||
             getCharacterById(scene.registry.get('selectedCharacter'));
         this.speed = 200 * this.character.speedMultiplier;
+        this.speedBoostUntil = 0;
+        this.armour = 0;
         this.damageMultiplier = this.character.damageMultiplier;
         this.facingAngle = 0;
         this.soundEffects = this.scene.soundEffects;
@@ -136,7 +138,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             Phaser.Input.Keyboard.KeyCodes.ONE,
             Phaser.Input.Keyboard.KeyCodes.TWO,
             Phaser.Input.Keyboard.KeyCodes.THREE,
-            Phaser.Input.Keyboard.KeyCodes.FOUR
+            Phaser.Input.Keyboard.KeyCodes.FOUR,
+            Phaser.Input.Keyboard.KeyCodes.FIVE
         ].map(keyCode => scene.input.keyboard.addKey(keyCode));
 
         this.weapon = null;
@@ -236,7 +239,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.grenadeText.setScrollFactor(1);
 
         this.weaponListTexts = [];
-        for (let index = 0; index < 4; index++) {
+        for (let index = 0; index < this.weaponSlots.length; index++) {
             const text = scene.add.text(0, 0, '', {
                 fontSize: '16px',
                 color: '#ffffff',
@@ -270,6 +273,13 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     takeDamage(amount) {
 
         if (this.health <= 0) {
+            return;
+        }
+
+        const absorbedDamage = Math.min(this.armour, amount);
+        this.armour -= absorbedDamage;
+        amount -= absorbedDamage;
+        if (amount <= 0) {
             return;
         }
 
@@ -588,12 +598,12 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         }
     }
 
-    tryPickupMedKit() {
-        if (!this.scene.medKitPickups || this.health >= this.maxHealth) {
+    tryPickupSpecial() {
+        if (!this.scene.specialPickups) {
             return;
         }
 
-        for (const pickup of this.scene.medKitPickups) {
+        for (const pickup of this.scene.specialPickups) {
             if (!pickup.active) {
                 continue;
             }
@@ -606,19 +616,34 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             );
 
             if (distance < 35) {
-                this.health = Math.min(
-                    this.maxHealth,
-                    this.health + pickup.healAmount
-                );
-                this.healthBar.width =
-                    170 * (this.health / this.maxHealth);
+                const { effect, amount, duration } = pickup.item;
+                if (effect === 'heal') {
+                    if (this.health >= this.maxHealth) continue;
+                    this.health = Math.min(this.maxHealth, this.health + amount);
+                } else if (effect === 'armour') {
+                    if (this.armour >= amount) continue;
+                    this.armour = amount;
+                } else if (effect === 'speed') {
+                    this.speedBoostUntil = this.scene.time.now + duration;
+                }
+
+                if (effect === 'heal') {
+                    this.healthBar.width =
+                        170 * (this.health / this.maxHealth);
+                }
 
                 pickup.destroy();
-                this.scene.medKitPickups = this.scene.medKitPickups.filter(
+                this.scene.specialPickups = this.scene.specialPickups.filter(
                     item => item !== pickup
                 );
             }
         }
+    }
+
+    getMovementSpeed() {
+        return this.scene.time.now < this.speedBoostUntil
+            ? this.speed * 1.2
+            : this.speed;
     }
 
     tryPickupCoin() {
@@ -976,8 +1001,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             const dy = worldPoint.y - this.y;
             const length = Math.hypot(dx, dy) || 1;
 
-            velocityX = (dx / length) * this.speed;
-            velocityY = (dy / length) * this.speed;
+            const movementSpeed = this.getMovementSpeed();
+            velocityX = (dx / length) * movementSpeed;
+            velocityY = (dy / length) * movementSpeed;
 
         } else {
             if (
@@ -985,14 +1011,14 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                 this.keys.A.isDown
             ) {
 
-                velocityX = -this.speed;
+                velocityX = -this.getMovementSpeed();
 
             } else if (
                 this.cursors.right.isDown ||
                 this.keys.D.isDown
             ) {
 
-                velocityX = this.speed;
+                velocityX = this.getMovementSpeed();
             }
 
             if (
@@ -1000,7 +1026,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                 this.keys.S.isDown
             ) {
 
-                velocityY = this.speed;
+                velocityY = this.getMovementSpeed();
             }
         }
 
@@ -1016,7 +1042,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
             this.body.velocity
                 .normalize()
-                .scale(this.speed);
+                .scale(this.getMovementSpeed());
         }
 
         // =========================
@@ -1089,7 +1115,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
         this.tryPickupWeapon();
         this.tryPickupAmmo();
-        this.tryPickupMedKit();
+        this.tryPickupSpecial();
         this.tryPickupCoin();
         this.tryPickupGrenade();
 

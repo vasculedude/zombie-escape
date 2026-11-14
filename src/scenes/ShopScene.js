@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
 import { getWeaponPrice, WEAPON_CATALOG } from '../utils/weaponCatalog.js';
+import {
+    getSurvivalItemPrice,
+    SURVIVAL_ITEM_CATALOG
+} from '../utils/survivalItemCatalog.js';
 
 export default class ShopScene extends Phaser.Scene {
     constructor() {
@@ -9,7 +13,9 @@ export default class ShopScene extends Phaser.Scene {
     create() {
         this.cameras.main.setBackgroundColor('#101010');
         this.ownedWeapons = this.registry.get('ownedWeapons') || [];
+        this.ownedSpecials = this.registry.get('ownedSpecials') || [];
         this.pendingPurchases = new Set();
+        this.pendingSpecialPurchases = new Set();
 
         this.add.text(400, 38, 'SHOP', {
             fontSize: '38px',
@@ -48,6 +54,8 @@ export default class ShopScene extends Phaser.Scene {
 
         this.weaponButtons = new Map();
         this.weaponItems = [];
+        this.specialButtons = new Map();
+        this.specialItems = [];
         WEAPON_CATALOG.forEach((weapon, index) => {
             const column = index % 2;
             const row = Math.floor(index / 2);
@@ -92,6 +100,44 @@ export default class ShopScene extends Phaser.Scene {
             button.on('pointerdown', () => this.purchaseWeapon(weapon.id));
         });
 
+        SURVIVAL_ITEM_CATALOG.forEach((item, index) => {
+            const column = index % 2;
+            const row = Math.floor(index / 2);
+            const x = 20 + column * 390;
+            const y = 122 + row * 116;
+            const card = this.add.rectangle(x + 180, y + 44, 370, 92, 0x202020)
+                .setStrokeStyle(1, 0x555555)
+                .setOrigin(0.5);
+            const title = this.add.text(x + 10, y + 8, `${item.name} - ${item.rarity}`, {
+                fontSize: '17px',
+                color: '#ffffff',
+                fontStyle: 'bold'
+            });
+            const description = this.add.text(x + 10, y + 39, item.description, {
+                fontSize: '13px',
+                color: '#bbbbbb',
+                wordWrap: { width: 235 }
+            });
+            const button = this.add.text(x + 285, y + 59, '', {
+                fontSize: '13px',
+                color: '#ffffff',
+                backgroundColor: '#245c24',
+                padding: { x: 8, y: 7 }
+            }).setOrigin(0.5);
+
+            this.specialButtons.set(item.id, button);
+            this.specialItems.push(card, title, description, button);
+            button.setInteractive({ useHandCursor: true });
+            this.updateSpecialButton(item.id);
+            button.on('pointerover', () => {
+                if (!this.ownedSpecials.includes(item.id)) {
+                    button.setStyle({ color: '#ffff00' });
+                }
+            });
+            button.on('pointerout', () => button.setStyle({ color: '#ffffff' }));
+            button.on('pointerdown', () => this.purchaseSpecial(item.id));
+        });
+
         const characterShop = this.add.text(400, 565, 'CHARACTERS', {
             fontSize: '19px',
             color: '#ffffff',
@@ -123,6 +169,9 @@ export default class ShopScene extends Phaser.Scene {
         for (const item of this.weaponItems) {
             item.setVisible(showWeapons);
         }
+        for (const item of this.specialItems) {
+            item.setVisible(!showWeapons);
+        }
         this.weaponCategoryButton.setStyle({
             backgroundColor: showWeapons ? '#245c24' : '#333333'
         });
@@ -151,6 +200,26 @@ export default class ShopScene extends Phaser.Scene {
         }
     }
 
+    updateSpecialButton(itemId) {
+        const button = this.specialButtons.get(itemId);
+        if (!button) return;
+
+        const owned = this.ownedSpecials.includes(itemId);
+        button.setText(
+            owned ? 'OWNED' : this.pendingSpecialPurchases.has(itemId)
+                ? 'BUYING...'
+                : `${getSurvivalItemPrice(itemId)} COINS`
+        );
+        button.setStyle({
+            backgroundColor: owned ? '#333333' : '#245c24',
+            color: '#ffffff'
+        });
+        button.disableInteractive();
+        if (!owned && !this.pendingSpecialPurchases.has(itemId)) {
+            button.setInteractive({ useHandCursor: true });
+        }
+    }
+
     async loadInventory() {
         const token = this.registry.get('authToken');
         if (!token) {
@@ -169,8 +238,15 @@ export default class ShopScene extends Phaser.Scene {
 
             this.ownedWeapons = result.ownedWeapons;
             this.registry.set('ownedWeapons', this.ownedWeapons);
+            this.ownedSpecials = Array.isArray(result.ownedSpecials)
+                ? result.ownedSpecials
+                : [];
+            this.registry.set('ownedSpecials', this.ownedSpecials);
             if (Array.isArray(result.spawnWeapons)) {
                 this.registry.set('spawnWeapons', result.spawnWeapons);
+            }
+            if (Array.isArray(result.spawnSpecials)) {
+                this.registry.set('spawnSpecials', result.spawnSpecials);
             }
             if (Array.isArray(result.ownedCharacters)) {
                 this.registry.set('ownedCharacters', result.ownedCharacters);
@@ -182,6 +258,9 @@ export default class ShopScene extends Phaser.Scene {
             this.coinsText.setText(`Coins: ${result.coins}`);
             for (const weapon of WEAPON_CATALOG) {
                 this.updateWeaponButton(weapon.id);
+            }
+            for (const item of SURVIVAL_ITEM_CATALOG) {
+                this.updateSpecialButton(item.id);
             }
         } catch (error) {
             console.error('Could not load weapon shop inventory:', error);
@@ -230,6 +309,62 @@ export default class ShopScene extends Phaser.Scene {
         } finally {
             this.pendingPurchases.delete(weaponId);
             this.updateWeaponButton(weaponId);
+        }
+    }
+
+    async purchaseSpecial(itemId) {
+        if (
+            this.pendingSpecialPurchases.has(itemId) ||
+            this.ownedSpecials.includes(itemId)
+        ) {
+            return;
+        }
+
+        const token = this.registry.get('authToken');
+        if (!token) {
+            this.statusText.setText('Please log in to buy survival items.');
+            return;
+        }
+
+        this.pendingSpecialPurchases.add(itemId);
+        this.updateSpecialButton(itemId);
+        this.statusText.setText('Purchasing survival item...');
+
+        try {
+            const response = await fetch(`${this.getServerUrl()}/specials/purchase`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `******`
+                },
+                body: JSON.stringify({ itemId })
+            });
+            const result = await response.json();
+            if (
+                !response.ok ||
+                !result.success ||
+                !Array.isArray(result.ownedSpecials) ||
+                !Number.isInteger(result.coins)
+            ) {
+                throw new Error(result.message || 'Could not purchase survival item.');
+            }
+
+            this.ownedSpecials = result.ownedSpecials;
+            this.registry.set('ownedSpecials', this.ownedSpecials);
+            this.registry.set('coins', result.coins);
+            this.coinsText.setText(`Coins: ${result.coins}`);
+            const item = SURVIVAL_ITEM_CATALOG.find(candidate => candidate.id === itemId);
+            this.statusText.setText(
+                itemId === 'backpack'
+                    ? 'Backpack purchased. Select one additional weapon in the Armory.'
+                    : `${item.name} unlocked. Select it in the Armory to spawn it next run.`
+            );
+        } catch (error) {
+            console.error('Survival item purchase failed:', error);
+            this.statusText.setText(error.message);
+        } finally {
+            this.pendingSpecialPurchases.delete(itemId);
+            this.updateSpecialButton(itemId);
         }
     }
 

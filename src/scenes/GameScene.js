@@ -6,12 +6,16 @@ import Zombie from '../entities/Zombie.js';
 import EasyStar from 'easystarjs';
 import Weapon from '../entities/Weapon.js';
 import AmmoPickup from '../entities/AmmoPickup.js';
-import MedKitPickup from '../entities/MedKitPickup.js';
+import SurvivalItemPickup from '../entities/SurvivalItemPickup.js';
 import CoinPickup from '../entities/CoinPickup.js';
 import GrenadePickup from '../entities/GrenadePickup.js';
 import createSoundEffects from '../utils/soundEffects.js';
 import { getSurvivalCoinReward } from '../utils/coinRewards.js';
 import { getSpawnableWeaponIds } from '../utils/weaponCatalog.js';
+import {
+    getMaxWeaponSelections,
+    getSpawnableSurvivalItemIds
+} from '../utils/survivalItemCatalog.js';
 import {
     getAmmoPickupCount,
     getAmmoSpawnInterval,
@@ -57,9 +61,16 @@ export default class GameScene extends Phaser.Scene {
             this.registry.get('ownedWeapons'),
             this.registry.get('spawnWeapons')
         );
-        this.armoryWeaponIds = selectedWeaponIds.length === 4
+        const maxWeaponSelections = getMaxWeaponSelections(
+            this.registry.get('ownedSpecials')
+        );
+        this.armoryWeaponIds = selectedWeaponIds.length === maxWeaponSelections
             ? selectedWeaponIds
-            : availableWeaponIds.slice(0, 4);
+            : availableWeaponIds.slice(0, maxWeaponSelections);
+        this.armorySpecialIds = getSpawnableSurvivalItemIds(
+            this.registry.get('ownedSpecials'),
+            this.registry.get('spawnSpecials')
+        );
 
         this.player = new Player(
             this,
@@ -363,13 +374,15 @@ this.time.addEvent({
     loop: true
 });
 
-this.medKitPickups = [];
+this.specialPickups = [];
 
 this.time.addEvent({
     delay: getHealthSpawnInterval(60000, this.character),
     callback: () => {
-        this.spawnMedKitNearPlayer();
-        this.spawnMedKitNearPlayer();
+        if (this.armorySpecialIds.length > 0) {
+            this.spawnSpecialNearPlayer();
+            this.spawnSpecialNearPlayer();
+        }
     },
     loop: true
 });
@@ -449,7 +462,9 @@ this.time.addEvent({
         this.ammoPickups.push(pickup);
     }
 
-    spawnMedKitNearPlayer() {
+    spawnSpecialNearPlayer() {
+        if (this.armorySpecialIds.length === 0) return;
+
         const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
         const distance = Phaser.Math.Between(120, 900);
         const x = Phaser.Math.Clamp(
@@ -463,8 +478,9 @@ this.time.addEvent({
             2965
         );
 
-        const pickup = new MedKitPickup(this, x, y);
-        this.medKitPickups.push(pickup);
+        const itemId = Phaser.Utils.Array.GetRandom(this.armorySpecialIds);
+        const pickup = new SurvivalItemPickup(this, x, y, itemId);
+        this.specialPickups.push(pickup);
     }
 
     spawnCoinNearPlayer() {

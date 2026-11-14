@@ -4,9 +4,13 @@ import {
     getWeaponById,
     STARTER_WEAPON_CATALOG
 } from '../utils/weaponCatalog.js';
+import {
+    getMaxWeaponSelections,
+    getSpawnableSurvivalItemIds,
+    SURVIVAL_ITEM_CATALOG
+} from '../utils/survivalItemCatalog.js';
 
 const STARTER_WEAPON_IDS = STARTER_WEAPON_CATALOG.map(weapon => weapon.id);
-const MAX_SELECTED_WEAPONS = 4;
 
 export default class ArmoryScene extends Phaser.Scene {
     constructor() {
@@ -16,9 +20,18 @@ export default class ArmoryScene extends Phaser.Scene {
     create() {
         this.cameras.main.setBackgroundColor('#101010');
         this.ownedWeapons = this.registry.get('ownedWeapons') || [];
+        this.ownedSpecials = this.registry.get('ownedSpecials') || [];
         this.selectedWeapons = this.getInitialSelection();
+        this.selectedSpecials = getSpawnableSurvivalItemIds(
+            this.ownedSpecials,
+            this.registry.get('spawnSpecials')
+        );
         this.weaponButtons = new Map();
+        this.specialButtons = new Map();
+        this.weaponItems = [];
+        this.specialItems = [];
         this.saving = false;
+        this.currentCategory = 'weapons';
 
         this.add.text(400, 40, 'ARMORY', {
             fontSize: '36px',
@@ -26,12 +39,16 @@ export default class ArmoryScene extends Phaser.Scene {
             fontStyle: 'bold'
         }).setOrigin(0.5);
 
-        this.selectionText = this.add.text(
-            400,
-            82,
-            '',
-            { fontSize: '16px', color: '#ffda70' }
-        ).setOrigin(0.5);
+        this.weaponsTab = this.createButton(340, 82, 'WEAPONS', () => {
+            this.showCategory('weapons');
+        }).setStyle({ backgroundColor: '#245c24' });
+        this.specialsTab = this.createButton(460, 82, 'SPECIAL', () => {
+            this.showCategory('special');
+        });
+        this.selectionText = this.add.text(400, 108, '', {
+            fontSize: '14px',
+            color: '#ffda70'
+        }).setOrigin(0.5);
 
         const weapons = getSpawnableWeaponIds(this.ownedWeapons)
             .map(getWeaponById)
@@ -50,7 +67,7 @@ export default class ArmoryScene extends Phaser.Scene {
                 0x202020
             ).setStrokeStyle(2, 0x555555);
 
-            this.add.text(x + 10, y + 12, weapon.name, {
+            const title = this.add.text(x + 10, y + 12, weapon.name, {
                 fontSize: '15px',
                 color: '#ffffff',
                 fontStyle: 'bold',
@@ -60,7 +77,7 @@ export default class ArmoryScene extends Phaser.Scene {
             const details = weapon.category === 'Melee'
                 ? `Melee | Damage ${weapon.damage}`
                 : `${weapon.category} | Damage ${weapon.damage}`;
-            this.add.text(x + 10, y + 42, details, {
+            const detailText = this.add.text(x + 10, y + 42, details, {
                 fontSize: '12px',
                 color: '#bbbbbb'
             });
@@ -74,6 +91,40 @@ export default class ArmoryScene extends Phaser.Scene {
             button.setInteractive({ useHandCursor: true });
             button.on('pointerdown', () => this.toggleWeapon(weapon.id));
             this.weaponButtons.set(weapon.id, { button, card });
+            this.weaponItems.push(card, title, detailText, button);
+        });
+
+        SURVIVAL_ITEM_CATALOG.forEach((item, index) => {
+            const column = index % 2;
+            const row = Math.floor(index / 2);
+            const x = 25 + column * 390;
+            const y = 128 + row * 104;
+            const card = this.add.rectangle(x + 180, y + 42, 370, 88, 0x202020)
+                .setStrokeStyle(2, 0x555555)
+                .setVisible(false);
+            const title = this.add.text(x + 12, y + 8, `${item.name} - ${item.rarity}`, {
+                fontSize: '16px',
+                color: '#ffffff',
+                fontStyle: 'bold'
+            }).setVisible(false);
+            const description = this.add.text(x + 12, y + 36, item.description, {
+                fontSize: '12px',
+                color: '#bbbbbb',
+                wordWrap: { width: 235 }
+            }).setVisible(false);
+            const button = this.add.text(x + 250, y + 59, '', {
+                fontSize: '11px',
+                color: '#ffffff',
+                backgroundColor: '#333333',
+                padding: { x: 7, y: 5 }
+            }).setOrigin(0.5).setVisible(false);
+            const selectable = item.effect !== 'backpack';
+            if (selectable) {
+                button.setInteractive({ useHandCursor: true });
+                button.on('pointerdown', () => this.toggleSpecial(item.id));
+            }
+            this.specialButtons.set(item.id, { button, card, selectable });
+            this.specialItems.push(card, title, description, button);
         });
 
         this.statusText = this.add.text(400, 466, '', {
@@ -91,19 +142,24 @@ export default class ArmoryScene extends Phaser.Scene {
         });
 
         this.refreshWeaponButtons();
+        this.refreshSpecialButtons();
+        this.showCategory('weapons');
         this.loadArmory();
     }
 
     getInitialSelection() {
         const savedSelection = this.registry.get('spawnWeapons');
+        const maxSelections = getMaxWeaponSelections(
+            this.registry.get('ownedSpecials')
+        );
         if (
             Array.isArray(savedSelection) &&
-            savedSelection.length === MAX_SELECTED_WEAPONS
+            savedSelection.length === maxSelections
         ) {
             return [...savedSelection];
         }
 
-        return [...STARTER_WEAPON_IDS];
+        return STARTER_WEAPON_IDS.slice(0, maxSelections);
     }
 
     createButton(x, y, label, callback) {
@@ -123,15 +179,18 @@ export default class ArmoryScene extends Phaser.Scene {
 
     toggleWeapon(weaponId) {
         if (this.saving) return;
+        const maxSelections = getMaxWeaponSelections(this.ownedSpecials);
 
         if (this.selectedWeapons.includes(weaponId)) {
             this.selectedWeapons = this.selectedWeapons.filter(
                 id => id !== weaponId
             );
-        } else if (this.selectedWeapons.length < MAX_SELECTED_WEAPONS) {
+        } else if (this.selectedWeapons.length < maxSelections) {
             this.selectedWeapons.push(weaponId);
         } else {
-            this.statusText.setText('Choose only four weapons. Unselect one first.');
+            this.statusText.setText(
+                `Choose only ${maxSelections} weapons. Unselect one first.`
+            );
             return;
         }
 
@@ -140,9 +199,12 @@ export default class ArmoryScene extends Phaser.Scene {
     }
 
     refreshWeaponButtons() {
-        this.selectionText.setText(
-            `Selected to spawn: ${this.selectedWeapons.length}/${MAX_SELECTED_WEAPONS}`
-        );
+        const maxSelections = getMaxWeaponSelections(this.ownedSpecials);
+        if (this.currentCategory === 'weapons') {
+            this.selectionText.setText(
+                `Weapons selected: ${this.selectedWeapons.length}/${maxSelections}`
+            );
+        }
 
         for (const [weaponId, { button, card }] of this.weaponButtons) {
             const selected = this.selectedWeapons.includes(weaponId);
@@ -153,6 +215,68 @@ export default class ArmoryScene extends Phaser.Scene {
             });
             card.setStrokeStyle(2, selected ? 0x55ff55 : 0x555555);
         }
+    }
+
+    toggleSpecial(itemId) {
+        if (this.saving) return;
+        if (this.selectedSpecials.includes(itemId)) {
+            this.selectedSpecials = this.selectedSpecials.filter(id => id !== itemId);
+        } else {
+            this.selectedSpecials.push(itemId);
+        }
+        this.statusText.setText('');
+        this.refreshSpecialButtons();
+    }
+
+    refreshSpecialButtons() {
+        if (this.currentCategory === 'special') {
+            this.selectionText.setText(
+                `Selected survival items: ${this.selectedSpecials.length}`
+            );
+        }
+
+        for (const [itemId, { button, card, selectable }] of this.specialButtons) {
+            const owned = this.ownedSpecials.includes(itemId);
+            const selected = this.selectedSpecials.includes(itemId);
+            button.setText(!owned
+                ? 'LOCKED - SHOP'
+                : selectable
+                    ? selected ? 'SELECTED - REMOVE' : 'SELECT TO SPAWN'
+                    : 'OWNED - +1 WEAPON SLOT'
+            );
+            button.setStyle({
+                backgroundColor: !owned ? '#333333' : selected ? '#245c24' : '#333333',
+                color: '#ffffff'
+            });
+            button.disableInteractive();
+            if (owned && selectable && !this.saving) {
+                button.setInteractive({ useHandCursor: true });
+            }
+            card.setStrokeStyle(2, selected ? 0x55ff55 : 0x555555);
+        }
+    }
+
+    showCategory(category) {
+        const showWeapons = category === 'weapons';
+        this.currentCategory = category;
+        for (const item of this.weaponItems) {
+            item.setVisible(showWeapons);
+        }
+        for (const item of this.specialItems) {
+            item.setVisible(!showWeapons);
+        }
+        this.weaponsTab.setStyle({
+            backgroundColor: showWeapons ? '#245c24' : '#333333',
+            color: '#ffffff'
+        });
+        this.specialsTab.setStyle({
+            backgroundColor: showWeapons ? '#333333' : '#245c24',
+            color: '#ffffff'
+        });
+        this.selectionText.setText(showWeapons
+            ? `Weapons selected: ${this.selectedWeapons.length}/${getMaxWeaponSelections(this.ownedSpecials)}`
+            : `Selected survival items: ${this.selectedSpecials.length}`
+        );
     }
 
     async loadArmory() {
@@ -178,8 +302,13 @@ export default class ArmoryScene extends Phaser.Scene {
 
             this.ownedWeapons = result.ownedWeapons;
             this.registry.set('ownedWeapons', this.ownedWeapons);
+            this.ownedSpecials = Array.isArray(result.ownedSpecials)
+                ? result.ownedSpecials
+                : [];
+            this.registry.set('ownedSpecials', this.ownedSpecials);
 
             const availableIds = getSpawnableWeaponIds(this.ownedWeapons);
+            const maxSelections = getMaxWeaponSelections(this.ownedSpecials);
             const serverSelection = Array.isArray(result.spawnWeapons)
                 ? result.spawnWeapons
                 : STARTER_WEAPON_IDS;
@@ -188,14 +317,22 @@ export default class ArmoryScene extends Phaser.Scene {
                 serverSelection
             );
 
-            this.selectedWeapons = validSelection.length === MAX_SELECTED_WEAPONS
+            this.selectedWeapons = validSelection.length === maxSelections
                 ? validSelection
-                : availableIds.slice(0, MAX_SELECTED_WEAPONS);
+                : availableIds.slice(0, maxSelections);
             this.registry.set('spawnWeapons', this.selectedWeapons);
+            this.selectedSpecials = getSpawnableSurvivalItemIds(
+                this.ownedSpecials,
+                result.spawnSpecials
+            );
+            this.registry.set('spawnSpecials', this.selectedSpecials);
             this.refreshWeaponButtons();
+            this.refreshSpecialButtons();
 
-            if (availableIds.length < MAX_SELECTED_WEAPONS) {
-                this.statusText.setText('You need four available weapons to save your armory.');
+            if (availableIds.length < maxSelections) {
+                this.statusText.setText(
+                    `You need ${maxSelections} available weapons to save your armory.`
+                );
             }
         } catch (error) {
             console.error('Could not load armory:', error);
@@ -204,8 +341,9 @@ export default class ArmoryScene extends Phaser.Scene {
     }
 
     async saveArmory() {
-        if (this.selectedWeapons.length !== MAX_SELECTED_WEAPONS) {
-            this.statusText.setText('Select exactly four weapons before saving.');
+        const maxSelections = getMaxWeaponSelections(this.ownedSpecials);
+        if (this.selectedWeapons.length !== maxSelections) {
+            this.statusText.setText(`Select exactly ${maxSelections} weapons before saving.`);
             return;
         }
 
@@ -226,18 +364,31 @@ export default class ArmoryScene extends Phaser.Scene {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`
                 },
-                body: JSON.stringify({ weaponIds: this.selectedWeapons })
+                body: JSON.stringify({
+                    weaponIds: this.selectedWeapons,
+                    specialIds: this.selectedSpecials
+                })
             });
             const result = await response.json();
 
-            if (!response.ok || !result.success || !Array.isArray(result.spawnWeapons)) {
+            if (
+                !response.ok ||
+                !result.success ||
+                !Array.isArray(result.spawnWeapons) ||
+                !Array.isArray(result.spawnSpecials)
+            ) {
                 throw new Error(result.message || 'Could not save your armory.');
             }
 
             this.selectedWeapons = result.spawnWeapons;
+            this.selectedSpecials = result.spawnSpecials;
             this.registry.set('spawnWeapons', this.selectedWeapons);
+            this.registry.set('spawnSpecials', this.selectedSpecials);
             this.refreshWeaponButtons();
-            this.statusText.setText('Armory saved. These four weapons can spawn in your next game.');
+            this.refreshSpecialButtons();
+            this.statusText.setText(
+                `Armory saved. Your ${maxSelections} weapons and selected survival items can spawn next run.`
+            );
         } catch (error) {
             console.error('Could not save armory:', error);
             this.statusText.setText(error.message || 'Could not save your armory.');
