@@ -52,6 +52,7 @@ app.use(cors({
 const { Pool } = pg;
 
 const PROMO_REWARDS = Object.freeze({
+    ADMIN: { coins: 5000, label: 'Admin bonus' },
     STARTER: { coins: 250, label: 'Starter bonus' },
     SURVIVOR: { coins: 500, label: 'Survivor stash' },
     ZOMBIE: { coins: 1000, label: 'Zombie hunter bonus' },
