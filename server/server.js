@@ -15,7 +15,9 @@ import {
 } from '../src/utils/characterCatalog.js';
 import {
     getMaxWeaponSelections,
-    getSpawnableSurvivalItemIds
+    getSpawnableSurvivalItemIds,
+    getSurvivalItemPrice,
+    SURVIVAL_ITEM_CATALOG
 } from '../src/utils/survivalItemCatalog.js';
 
 const app = express();
@@ -575,11 +577,68 @@ app.post('/characters/select', authenticate, async (req, res) => {
     }
 });
 
-app.post('/specials/purchase', authenticate, (req, res) => {
-    return res.status(403).json({
-        success: false,
-        message: 'Special items are not available for purchase.'
-    });
+app.post('/specials/purchase', authenticate, async (req, res) => {
+    try {
+        const item = SURVIVAL_ITEM_CATALOG.find(
+            candidate => candidate.id === req.body?.itemId
+        );
+        if (!item) {
+            return res.status(400).json({
+                success: false,
+                message: 'Unknown survival item.'
+            });
+        }
+
+        const price = getSurvivalItemPrice(item.id);
+        const result = await pool.query(
+            `UPDATE users
+             SET coins = coins - $1,
+                 owned_specials = array_append(owned_specials, $2)
+             WHERE username_key = $3
+               AND coins >= $1
+               AND NOT ($2 = ANY(owned_specials))
+             RETURNING coins, owned_specials`,
+            [price, item.id, req.user.username_key]
+        );
+
+        if (result.rows.length > 0) {
+            return res.json({
+                success: true,
+                coins: result.rows[0].coins,
+                ownedSpecials: result.rows[0].owned_specials
+            });
+        }
+
+        const current = await pool.query(
+            'SELECT coins, owned_specials FROM users WHERE username_key = $1',
+            [req.user.username_key]
+        );
+        const user = current.rows[0];
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Please log in again.'
+            });
+        }
+
+        if (user.owned_specials.includes(item.id)) {
+            return res.status(409).json({
+                success: false,
+                message: 'You already own this survival item.'
+            });
+        }
+
+        return res.status(400).json({
+            success: false,
+            message: `You need ${price} coins to buy this item.`
+        });
+    } catch (error) {
+        console.error('Survival item purchase error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Could not purchase this survival item.'
+        });
+    }
 });
 
 // PURCHASE WEAPON
