@@ -1,9 +1,6 @@
 import Phaser from 'phaser';
 import { getWeaponPrice, WEAPON_CATALOG } from '../utils/weaponCatalog.js';
-import {
-    getSurvivalItemPrice,
-    SURVIVAL_ITEM_CATALOG
-} from '../utils/survivalItemCatalog.js';
+import { SURVIVAL_ITEM_CATALOG } from '../utils/survivalItemCatalog.js';
 
 export default class ShopScene extends Phaser.Scene {
     constructor() {
@@ -15,7 +12,6 @@ export default class ShopScene extends Phaser.Scene {
         this.ownedWeapons = this.registry.get('ownedWeapons') || [];
         this.ownedSpecials = this.registry.get('ownedSpecials') || [];
         this.pendingPurchases = new Set();
-        this.pendingSpecialPurchases = new Set();
 
         this.add.text(400, 38, 'SHOP', {
             fontSize: '38px',
@@ -127,15 +123,7 @@ export default class ShopScene extends Phaser.Scene {
 
             this.specialButtons.set(item.id, button);
             this.specialItems.push(card, title, description, button);
-            button.setInteractive({ useHandCursor: true });
             this.updateSpecialButton(item.id);
-            button.on('pointerover', () => {
-                if (!this.ownedSpecials.includes(item.id)) {
-                    button.setStyle({ color: '#ffff00' });
-                }
-            });
-            button.on('pointerout', () => button.setStyle({ color: '#ffffff' }));
-            button.on('pointerdown', () => this.purchaseSpecial(item.id));
         });
 
         const characterShop = this.add.text(400, 565, 'CHARACTERS', {
@@ -205,19 +193,12 @@ export default class ShopScene extends Phaser.Scene {
         if (!button) return;
 
         const owned = this.ownedSpecials.includes(itemId);
-        button.setText(
-            owned ? 'OWNED' : this.pendingSpecialPurchases.has(itemId)
-                ? 'BUYING...'
-                : `${getSurvivalItemPrice(itemId)} COINS`
-        );
+        button.setText(owned ? 'OWNED' : 'NOT FOR SALE');
         button.setStyle({
-            backgroundColor: owned ? '#333333' : '#245c24',
+            backgroundColor: '#333333',
             color: '#ffffff'
         });
         button.disableInteractive();
-        if (!owned && !this.pendingSpecialPurchases.has(itemId)) {
-            button.setInteractive({ useHandCursor: true });
-        }
     }
 
     async loadInventory() {
@@ -309,62 +290,6 @@ export default class ShopScene extends Phaser.Scene {
         } finally {
             this.pendingPurchases.delete(weaponId);
             this.updateWeaponButton(weaponId);
-        }
-    }
-
-    async purchaseSpecial(itemId) {
-        if (
-            this.pendingSpecialPurchases.has(itemId) ||
-            this.ownedSpecials.includes(itemId)
-        ) {
-            return;
-        }
-
-        const token = this.registry.get('authToken');
-        if (!token) {
-            this.statusText.setText('Please log in to buy survival items.');
-            return;
-        }
-
-        this.pendingSpecialPurchases.add(itemId);
-        this.updateSpecialButton(itemId);
-        this.statusText.setText('Purchasing survival item...');
-
-        try {
-            const response = await fetch(`${this.getServerUrl()}/specials/purchase`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `******`
-                },
-                body: JSON.stringify({ itemId })
-            });
-            const result = await response.json();
-            if (
-                !response.ok ||
-                !result.success ||
-                !Array.isArray(result.ownedSpecials) ||
-                !Number.isInteger(result.coins)
-            ) {
-                throw new Error(result.message || 'Could not purchase survival item.');
-            }
-
-            this.ownedSpecials = result.ownedSpecials;
-            this.registry.set('ownedSpecials', this.ownedSpecials);
-            this.registry.set('coins', result.coins);
-            this.coinsText.setText(`Coins: ${result.coins}`);
-            const item = SURVIVAL_ITEM_CATALOG.find(candidate => candidate.id === itemId);
-            this.statusText.setText(
-                itemId === 'backpack'
-                    ? 'Backpack purchased. Select one additional weapon in the Armory.'
-                    : `${item.name} unlocked. Select it in the Armory to spawn it next run.`
-            );
-        } catch (error) {
-            console.error('Survival item purchase failed:', error);
-            this.statusText.setText(error.message);
-        } finally {
-            this.pendingSpecialPurchases.delete(itemId);
-            this.updateSpecialButton(itemId);
         }
     }
 

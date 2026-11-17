@@ -28,8 +28,7 @@ export default class MenuScene extends Phaser.Scene {
 
         this.loadCoins();
 
-        // New Game button
-        const newGame = this.add.text(400, 250, 'NEW GAME', {
+        const newGame = this.add.text(400, 250, 'PLAY', {
             fontSize: '28px',
             color: '#ffffff',
             backgroundColor: '#333333',
@@ -50,7 +49,7 @@ export default class MenuScene extends Phaser.Scene {
         });
 
         newGame.on('pointerdown', () => {
-            this.scene.start('CharacterScene');
+            this.showPlayModeSelection();
         });
 
         // Continue button
@@ -110,6 +109,62 @@ export default class MenuScene extends Phaser.Scene {
         });
 
         this.createPromoCodePanel();
+
+        this.mainMenuItems = [
+            newGame,
+            continueButton,
+            shop,
+            armory,
+            settings,
+            this.promoPanel
+        ];
+        this.modeSelectionItems = [
+            this.add.text(400, 250, 'CHOOSE A GAME MODE', {
+                fontSize: '23px',
+                color: '#ffffff',
+                fontStyle: 'bold'
+            }).setOrigin(0.5),
+            this.createMenuButton(400, 315, 'SINGLE PLAYER', '#245c24', () => {
+                this.scene.start('CharacterScene');
+            }),
+            this.createMenuButton(400, 375, 'MULTIPLAYER', '#245c24', () => {
+                this.modeStatus.setText('Multiplayer is being rebuilt and is not ready yet.');
+            }),
+            this.add.text(400, 425, 'Multiplayer is not available yet.', {
+                fontSize: '15px',
+                color: '#bbbbbb'
+            }).setOrigin(0.5),
+            this.createMenuButton(400, 475, 'BACK', '#333333', () => {
+                this.showMainMenu();
+            })
+        ];
+        this.modeStatus = this.modeSelectionItems[3];
+        this.modeSelectionItems.forEach(item => item.setVisible(false));
+    }
+
+    createMenuButton(x, y, label, backgroundColor, onClick) {
+        const button = this.add.text(x, y, label, {
+            fontSize: '22px',
+            color: '#ffffff',
+            backgroundColor,
+            padding: { x: 22, y: 11 }
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+        button.on('pointerover', () => button.setStyle({ color: '#ffff00' }));
+        button.on('pointerout', () => button.setStyle({ color: '#ffffff' }));
+        button.on('pointerdown', onClick);
+        return button;
+    }
+
+    showPlayModeSelection() {
+        this.mainMenuItems.forEach(item => item.setVisible(false));
+        this.modeSelectionItems.forEach(item => item.setVisible(true));
+        this.modeStatus.setText('Multiplayer is not available yet.');
+    }
+
+    showMainMenu() {
+        this.modeSelectionItems.forEach(item => item.setVisible(false));
+        this.mainMenuItems.forEach(item => item.setVisible(true));
     }
 
     createPromoCodePanel() {
