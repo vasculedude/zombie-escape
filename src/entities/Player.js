@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import Projectile from './Projectile.js';
 import { MAX_TOTAL_AMMO, distributeAmmoPickup } from '../utils/ammoUtils.js';
 import { getCharacterById } from '../utils/characterCatalog.js';
+import { getSurvivalItemById } from '../utils/survivalItemCatalog.js';
+import { getWeaponById } from '../utils/weaponCatalog.js';
 
 export default class Player extends Phaser.Physics.Arcade.Sprite {
 
@@ -126,6 +128,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             scene.input.keyboard.addKey(
                 Phaser.Input.Keyboard.KeyCodes.SPACE
             );
+        this.dropWeaponKey = scene.input.keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.Q
+        );
 
         this.punchCooldown = 400;
         this.lastPunchTime = 0;
@@ -403,6 +408,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
     tryPickupWeapon() {
 
+        if (this.scene.isMultiplayer) return;
         if (!this.scene.weapons) {
             return;
         }
@@ -461,6 +467,132 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                 break;
             }
         }
+
+    }
+
+    applyNetworkPickup(pickup, equipWeapon = false) {
+        if (!pickup) return;
+
+        if (pickup.kind === 'weapon') {
+            const weapon = getWeaponById(pickup.type);
+            if (!weapon) return;
+
+            let slotIndex = this.scene.armoryWeaponIds.indexOf(weapon.id);
+            if (slotIndex < 0) {
+                slotIndex = this.selectedWeaponSlot;
+                this.scene.armoryWeaponIds[slotIndex] = weapon.id;
+            }
+
+            this.storeCurrentWeaponSlot();
+            this.weaponSlots[slotIndex] = {
+                type: weapon.id,
+                weapon: {
+                    type: weapon.id,
+                    name: weapon.name.toUpperCase(),
+                    damage: weapon.damage,
+                    range: weapon.range,
+                    fireRate: weapon.fireRate,
+                    magazineSize: weapon.magazineSize || 0,
+                    pellets: weapon.pellets || 1,
+                    isMelee: weapon.category === 'Melee'
+                },
+                magazineAmmo: weapon.category === 'Melee' ? 0 : weapon.magazineSize,
+                reserveAmmo: weapon.category === 'Melee'
+                    ? 0
+                    : Math.max(0, MAX_TOTAL_AMMO - weapon.magazineSize),
+                reloadUntil: 0,
+                swordDashCharges: this.maxSwordDashCharges,
+                swordRechargeUntil: 0
+            };
+            if (equipWeapon) {
+                this.selectedWeaponSlot = slotIndex;
+                this.applyWeaponSlot(slotIndex);
+            } else if (slotIndex === this.selectedWeaponSlot) {
+                this.applyWeaponSlot(slotIndex);
+            } else {
+                this.updateWeaponBar();
+            }
+            return;
+        }
+
+        if (pickup.kind === 'ammo') {
+            this.storeCurrentWeaponSlot();
+            const result = distributeAmmoPickup(
+                this.weaponSlots,
+                pickup.amount,
+                MAX_TOTAL_AMMO
+            );
+            this.weaponSlots = result.weaponSlots;
+            const activeSlot = this.weaponSlots[this.selectedWeaponSlot];
+            this.magazineAmmo = activeSlot.magazineAmmo;
+            this.reserveAmmo = activeSlot.reserveAmmo;
+            this.reloadUntil = activeSlot.reloadUntil;
+            this.updateWeaponBar();
+            return;
+        }
+
+        if (pickup.kind === 'special') {
+            const item = getSurvivalItemById(pickup.type);
+            if (!item) return;
+            if (item.effect === 'heal') {
+                this.health = Math.min(this.maxHealth, this.health + item.amount);
+                this.healthBar.width = 170 * (this.health / this.maxHealth);
+            } else if (item.effect === 'armour') {
+                this.armour = item.amount;
+            } else if (item.effect === 'speed') {
+                this.speedBoostUntil = this.scene.time.now + item.duration;
+            }
+            return;
+        }
+
+        if (pickup.kind === 'grenade') {
+            this.grenades = Math.min(
+                this.maxGrenades,
+                this.grenades + pickup.amount
+            );
+        } else if (pickup.kind === 'coin') {
+            this.scene.addCoins(pickup.amount);
+        }
+    }
+
+    dropNetworkWeapon(weaponId) {
+        const slotIndex = this.scene.armoryWeaponIds.indexOf(weaponId);
+        if (slotIndex < 0) return;
+
+        const slot = this.weaponSlots[slotIndex];
+        slot.weapon = null;
+        slot.magazineAmmo = 0;
+        slot.reserveAmmo = 0;
+        slot.reloadUntil = 0;
+        slot.swordDashCharges = this.maxSwordDashCharges;
+        slot.swordRechargeUntil = 0;
+
+        if (slotIndex === this.selectedWeaponSlot) {
+            this.applyWeaponSlot(slotIndex);
+        } else {
+            this.updateWeaponBar();
+        }
+    }
+
+    canApplyNetworkPickup(pickup) {
+        if (!pickup) return false;
+        if (pickup.kind === 'weapon' || pickup.kind === 'coin') return true;
+        if (pickup.kind === 'grenade') return this.grenades < this.maxGrenades;
+        if (pickup.kind === 'ammo') {
+            return distributeAmmoPickup(
+                this.weaponSlots,
+                pickup.amount,
+                MAX_TOTAL_AMMO
+            ).ammoAdded > 0;
+        }
+        if (pickup.kind === 'special') {
+            const item = getSurvivalItemById(pickup.type);
+            if (!item) return false;
+            if (item.effect === 'heal') return this.health < this.maxHealth;
+            if (item.effect === 'armour') return this.armour < item.amount;
+            return item.effect === 'speed';
+        }
+        return false;
     }
 
     storeCurrentWeaponSlot() {
@@ -544,6 +676,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     tryPickupAmmo() {
+        if (this.scene.isMultiplayer) return;
         if (!this.scene.ammoPickups) {
             return;
         }
@@ -599,6 +732,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     tryPickupSpecial() {
+        if (this.scene.isMultiplayer) return;
         if (!this.scene.specialPickups) {
             return;
         }
@@ -647,6 +781,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     tryPickupCoin() {
+        if (this.scene.isMultiplayer) return;
         if (!this.scene.coinPickups) {
             return;
         }
@@ -674,6 +809,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     tryPickupGrenade() {
+        if (this.scene.isMultiplayer) return;
         if (!this.scene.grenadePickups || this.grenades >= this.maxGrenades) {
             return;
         }
@@ -718,6 +854,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         });
 
         this.soundEffects?.playExplosion();
+
+        if (this.scene.isMultiplayer) {
+            this.scene.sendGrenadeAttack(x, y);
+            return;
+        }
 
         for (const zombie of [...this.scene.zombies]) {
             const distance = Phaser.Math.Distance.Between(
@@ -785,6 +926,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         }
 
         this.swordDashCharges -= 1;
+        if (this.scene.isMultiplayer) {
+            this.scene.sendCombatAttack('sword');
+        }
         this.swordSwing = {
             angle: this.facingAngle,
             startedAt: now,
@@ -804,6 +948,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.lastShotTime = now;
         this.meleeSwingUntil = now + 180;
         this.meleeSwingAngle = this.facingAngle;
+
+        if (this.scene.isMultiplayer) {
+            this.scene.sendCombatAttack('melee');
+            return;
+        }
 
         for (const zombie of [...this.scene.zombies]) {
             if (!zombie.active) continue;
@@ -875,6 +1024,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
         this.lastShotTime = now;
         this.magazineAmmo -= 1;
+        if (this.scene.isMultiplayer) {
+            this.scene.sendCombatAttack('fire');
+        }
 
         if (this.magazineAmmo === 0 && this.reserveAmmo > 0) {
             this.reloadUntil = now + this.reloadDelay;
@@ -1113,6 +1265,18 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         // PICKUP
         // =========================
 
+        if (
+            this.scene.isMultiplayer &&
+            Phaser.Input.Keyboard.JustDown(this.dropWeaponKey) &&
+            this.weapon
+        ) {
+            const nearbyWeapon = this.scene.findNearbyNetworkWeapon();
+            this.scene.swapNetworkWeapon(
+                this.weapon.type,
+                nearbyWeapon?.networkId
+            );
+        }
+
         this.tryPickupWeapon();
         this.tryPickupAmmo();
         this.tryPickupSpecial();
@@ -1137,6 +1301,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
             if (this.grenades > 0) {
                 this.throwGrenade();
+                return;
+            }
+
+            if (this.scene.isMultiplayer) {
+                this.scene.sendCombatAttack('punch');
                 return;
             }
 

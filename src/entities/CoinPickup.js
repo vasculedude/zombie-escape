@@ -2,12 +2,12 @@ import Phaser from 'phaser';
 
 export default class CoinPickup extends Phaser.GameObjects.Container {
 
-    constructor(scene, x, y) {
+    constructor(scene, x, y, amount) {
         super(scene, x, y);
 
         scene.add.existing(this);
 
-        this.amount = Phaser.Math.Between(10, 100);
+        this.amount = amount ?? Phaser.Math.Between(10, 100);
 
         const shadow = scene.add.ellipse(
             0,

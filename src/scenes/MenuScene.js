@@ -125,12 +125,14 @@ export default class MenuScene extends Phaser.Scene {
                 fontStyle: 'bold'
             }).setOrigin(0.5),
             this.createMenuButton(400, 315, 'SINGLE PLAYER', '#245c24', () => {
+                this.registry.set('gameMode', 'singleplayer');
                 this.scene.start('CharacterScene');
             }),
             this.createMenuButton(400, 375, 'MULTIPLAYER', '#245c24', () => {
-                this.modeStatus.setText('Multiplayer is being rebuilt and is not ready yet.');
+                this.registry.set('gameMode', 'multiplayer');
+                this.scene.start('CharacterScene');
             }),
-            this.add.text(400, 425, 'Multiplayer is not available yet.', {
+            this.add.text(400, 425, 'Join the shared world with everyone online.', {
                 fontSize: '15px',
                 color: '#bbbbbb'
             }).setOrigin(0.5),
@@ -159,7 +161,7 @@ export default class MenuScene extends Phaser.Scene {
     showPlayModeSelection() {
         this.mainMenuItems.forEach(item => item.setVisible(false));
         this.modeSelectionItems.forEach(item => item.setVisible(true));
-        this.modeStatus.setText('Multiplayer is not available yet.');
+        this.modeStatus.setText('Choose a mode to continue.');
     }
 
     showMainMenu() {

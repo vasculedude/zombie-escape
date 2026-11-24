@@ -54,7 +54,7 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
         return textureKey;
     }
 
-    constructor(scene, x, y, type = 'normal') {
+    constructor(scene, x, y, type = 'normal', options = {}) {
 
         super(scene, x, y, Zombie.createSpriteTexture(scene));
 
@@ -139,12 +139,14 @@ export default class Zombie extends Phaser.Physics.Arcade.Sprite {
             3
         );
 
-        scene.time.addEvent({
-            delay: 2000,
-            callback: this.pickNewDirection,
-            callbackScope: this,
-            loop: true
-        });
+        if (!options.networkReplica) {
+            scene.time.addEvent({
+                delay: 2000,
+                callback: this.pickNewDirection,
+                callbackScope: this,
+                loop: true
+            });
+        }
 
         // =========================
         // PATHFINDING

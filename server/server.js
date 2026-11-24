@@ -1,5 +1,7 @@
 import cors from 'cors';
 import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import pg from 'pg';
@@ -19,6 +21,7 @@ import {
     getSurvivalItemPrice,
     SURVIVAL_ITEM_CATALOG
 } from '../src/utils/survivalItemCatalog.js';
+import { registerMultiplayer } from './multiplayer.js';
 
 const app = express();
 app.use(express.json());
@@ -707,10 +710,19 @@ app.post('/weapons/purchase', authenticate, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+    cors: {
+        origin: allowedOrigins,
+        methods: ['GET', 'POST'],
+        credentials: true
+    }
+});
+registerMultiplayer(io, pool);
 
 initialiseDatabase()
     .then(() => {
-        app.listen(PORT, '0.0.0.0', () => {
+        httpServer.listen(PORT, '0.0.0.0', () => {
             console.log(`Server running on port ${PORT}`);
         });
     })
